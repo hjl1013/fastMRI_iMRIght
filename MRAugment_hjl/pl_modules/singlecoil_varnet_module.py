@@ -1,8 +1,8 @@
 """
 Handles training simplified VarNet models on single-coil data. The sensitivity map estimator network is removed.
 """
-from models.singlecoil_varnet import SinglecoilVarNet
-from fastmri.pl_modules import VarNetModule
+from MRAugment_hjl.models.singlecoil_varnet import SinglecoilVarNet
+from MRAugment_hjl.pl_modules.varnet_module import VarNetModule
 import fastmri
 
 class SinglecoilVarNetModule(VarNetModule):

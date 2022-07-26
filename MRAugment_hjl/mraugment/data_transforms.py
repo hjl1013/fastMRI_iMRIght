@@ -41,7 +41,7 @@ class VarNetDataTransform:
         mask: np.ndarray,
         target: np.ndarray,
         attrs: Dict,
-        fname: str,
+        fname_kspace: str,
         slice_num: int,
     ) -> Tuple[torch.Tensor, torch.Tensor, torch.Tensor, str, int, float, torch.Tensor]:
         """
@@ -66,7 +66,7 @@ class VarNetDataTransform:
         # Make sure data types match
         kspace = kspace.astype(np.complex64)
         target = target.astype(np.float32)
-        
+
         if target is not None:
             target = to_tensor(target)
             max_value = attrs["max"]
@@ -86,7 +86,7 @@ class VarNetDataTransform:
             kspace.unsqueeze_(0)
         assert len(kspace.shape) == 4
                 
-        seed = None if not self.use_seed else tuple(map(ord, fname))
+        seed = None if not self.use_seed else tuple(map(ord, fname_kspace)) #TODO
         acq_start = attrs["padding_left"]
         acq_end = attrs["padding_right"]
 
@@ -111,7 +111,7 @@ class VarNetDataTransform:
             masked_kspace,
             mask.byte(),
             target,
-            fname,
+            fname_kspace,
             slice_num,
             max_value,
             crop_size,

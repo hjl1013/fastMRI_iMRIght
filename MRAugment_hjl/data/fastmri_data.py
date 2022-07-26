@@ -16,7 +16,7 @@ import h5py
 import numpy as np
 import torch
 import yaml
-
+import fastmri
 
 def et_query(
     root: etree.Element,
@@ -194,7 +194,7 @@ class SliceDataset(torch.utils.data.Dataset):
 
     def __init__(
         self,
-        root: Union[str, Path, os.PathLike, List[str], List[Path]],
+        root: Union[str, Path, os.PathLike, List[str], List[Path]], #TODO
         challenge: str,
         transform: Optional[Callable] = None,
         use_dataset_cache: bool = False,
@@ -277,9 +277,12 @@ class SliceDataset(torch.utils.data.Dataset):
                     files += list(Path(r).iterdir())
             else:        
                 files = list(Path(root).iterdir())
-            
-            for fname in sorted(files):
-                metadata, num_slices = self._retrieve_metadata(fname)
+            files = sorted(files)
+
+            #TODO
+            for file in files:
+                metadata, num_slices = self._retrieve_metadata(file)
+                # num_slices = self._retrieve_metadata(fname)
                 
                 # only add to dataset if scanner type is desired or we don't filter scanners
                 if scanner_models is None:
@@ -291,8 +294,12 @@ class SliceDataset(torch.utils.data.Dataset):
                 
                 if add_to_dataset:
                     self.examples += [
-                        (fname, slice_ind, metadata) for slice_ind in range(num_slices)
+                        (file, slice_ind, metadata) for slice_ind in range(num_slices)
                     ]
+                # if True:
+                #     self.examples += [
+                #         (fname, slice_ind) for slice_ind in range(num_slices)
+                #     ]
 
             if not_cached and use_dataset_cache:
                 dataset_cache[root] = self.examples
@@ -325,61 +332,78 @@ class SliceDataset(torch.utils.data.Dataset):
             ]
 
     def _retrieve_metadata(self, fname):
-        with h5py.File(fname, "r") as hf:
-            et_root = etree.fromstring(hf["ismrmrd_header"][()])
-
-            enc = ["encoding", "encodedSpace", "matrixSize"]
-            enc_size = (
-                int(et_query(et_root, enc + ["x"])),
-                int(et_query(et_root, enc + ["y"])),
-                int(et_query(et_root, enc + ["z"])),
-            )
-            rec = ["encoding", "reconSpace", "matrixSize"]
-            recon_size = (
-                int(et_query(et_root, rec + ["x"])),
-                int(et_query(et_root, rec + ["y"])),
-                int(et_query(et_root, rec + ["z"])),
-            )
-
-            lims = ["encoding", "encodingLimits", "kspace_encoding_step_1"]
-            enc_limits_center = int(et_query(et_root, lims + ["center"]))
-            enc_limits_max = int(et_query(et_root, lims + ["maximum"])) + 1
-            scanner_model = str(et_query(et_root, ["acquisitionSystemInformation", "systemModel"]))
-
-            padding_left = enc_size[1] // 2 - enc_limits_center
-            padding_right = padding_left + enc_limits_max
+        with h5py.File(fname, "r") as hf: #TODO
+            # et_root = etree.fromstring(hf["ismrmrd_header"][()])
+            #
+            # enc = ["encoding", "encodedSpace", "matrixSize"]
+            # enc_size = (
+            #     int(et_query(et_root, enc + ["x"])),
+            #     int(et_query(et_root, enc + ["y"])),
+            #     int(et_query(et_root, enc + ["z"])),
+            # )
+            # rec = ["encoding", "reconSpace", "matrixSize"]
+            # recon_size = (
+            #     int(et_query(et_root, rec + ["x"])),
+            #     int(et_query(et_root, rec + ["y"])),
+            #     int(et_query(et_root, rec + ["z"])),
+            # )
+            #
+            # lims = ["encoding", "encodingLimits", "kspace_encoding_step_1"]
+            # enc_limits_center = int(et_query(et_root, lims + ["center"]))
+            # enc_limits_max = int(et_query(et_root, lims + ["maximum"])) + 1
+            # scanner_model = str(et_query(et_root, ["acquisitionSystemInformation", "systemModel"]))
+            #
+            # padding_left = enc_size[1] // 2 - enc_limits_center
+            # padding_right = padding_left + enc_limits_max
 
             num_slices = hf["kspace"].shape[0]
 
+        # with h5py.File(fname_image, "r") as hf:
+        #     target = hf['image_label']
+        #     recon_size = target.shape[1:]
+
+        # metadata = {
+        #     "padding_left": padding_left,
+        #     "padding_right": padding_right,
+        #     "encoding_size": enc_size,
+        #     "recon_size": recon_size,
+        #     "scanner_model": scanner_model,
+        # }
+
         metadata = {
-            "padding_left": padding_left,
-            "padding_right": padding_right,
-            "encoding_size": enc_size,
-            "recon_size": recon_size,
-            "scanner_model": scanner_model,
+            "padding_left": 0,
+            "padding_right": 0,
+            "encoding_size": None,
+            "recon_size": (384, 384),
+            "scanner_model": None,
         }
 
         return metadata, num_slices
+        # return num_slices
 
     def __len__(self):
         return len(self.examples)
 
-    def __getitem__(self, i: int):
+    def __getitem__(self, i: int): #TODO
         fname, dataslice, metadata = self.examples[i]
 
         with h5py.File(fname, "r") as hf:
             kspace = hf["kspace"][dataslice]
+            mask = np.array(hf["mask"]) if "mask" in hf else None
+            masked_kspace = kspace * mask
+            target = hf['image_label'][dataslice] if 'image_label' in hf else None
 
-            mask = np.asarray(hf["mask"]) if "mask" in hf else None
-
-            target = hf[self.recons_key][dataslice] if self.recons_key in hf else None
+        # with h5py.File(fname_image, "r") as hf:
+        #     target = hf['image_label'][dataslice] #if self.recons_key in hf else None
 
             attrs = dict(hf.attrs)
             attrs.update(metadata)
 
         if self.transform is None:
-            sample = (kspace, mask, target, attrs, fname.name, dataslice)
+            sample = (masked_kspace, mask, target, attrs, fname.name, dataslice)
+            # sample = (kspace, mask, target, fname.name, dataslice)
         else:
-            sample = self.transform(kspace, mask, target, attrs, fname.name, dataslice)
+            sample = self.transform(masked_kspace, mask, target, attrs, fname.name, dataslice)
+            # sample = self.transform(kspace, mask, target, fname.name, dataslice)
 
         return sample

@@ -22,19 +22,20 @@ sys.path.insert(0, os.path.dirname(pathlib.Path(__file__).parent.absolute())   )
 import pytorch_lightning as pl
 from fastmri.data.mri_data import fetch_dir
 from fastmri.data.subsample import create_mask_for_mask_type
-from fastmri.pl_modules import VarNetModule
+from MRAugment_hjl.pl_modules.varnet_module import VarNetModule
 
 # MRAugment-specific imports
-from mraugment.data_augment import DataAugmentor
-from mraugment.data_transforms import VarNetDataTransform
-from pl_modules.fastmri_data_module import FastMriDataModule
+from MRAugment_hjl.mraugment.data_augment import DataAugmentor
+# from MRAugment_hjl.mraugment.data_transforms import VarNetDataTransform #TODO
+from MRAugment_hjl.data.transforms import VarNetDataTransform
+from MRAugment_hjl.pl_modules.fastmri_data_module import FastMriDataModule
 
 # Imports for logging and other utility
 from pytorch_lightning.plugins import DDPPlugin
 import yaml
 from utils import load_args_from_config
 import torch.distributed
-from  pl_modules.singlecoil_varnet_module import SinglecoilVarNetModule
+from MRAugment_hjl.pl_modules.singlecoil_varnet_module import SinglecoilVarNetModule
 
 
 def cli_main(args):
@@ -83,13 +84,16 @@ def cli_main(args):
     # data
     # ------------
     # this creates a k-space mask for transforming input data
-    mask = create_mask_for_mask_type(
-        args.mask_type, args.center_fractions, args.accelerations
-    )
+    # mask = create_mask_for_mask_type(
+    #     args.mask_type, args.center_fractions, args.accelerations
+    # )
+    # TODO
+    mask = None
     
     # use random masks for train transform, fixed masks for val transform
     # pass data augmentor to train transform only
     train_transform = VarNetDataTransform(augmentor=augmentor, mask_func=mask, use_seed=False)
+    # train_transform = VarNetDataTransform(mask_func=mask, use_seed=False)
     val_transform = VarNetDataTransform(mask_func=mask)
     test_transform = VarNetDataTransform()
     
@@ -202,11 +206,11 @@ def build_args():
     # module config
     parser = VarNetModule.add_model_specific_args(parser)
     parser.set_defaults(
-        num_cascades=12,  # number of unrolled iterations
-        pools=4,  # number of pooling layers for U-Net
-        chans=18,  # number of top-level channels for U-Net
-        sens_pools=4,  # number of pooling layers for sense est. U-Net
-        sens_chans=8,  # number of top-level channels for sense est. U-Net
+        num_cascades=2,  # number of unrolled iterations
+        pools=2,  # number of pooling layers for U-Net
+        chans=2,  # number of top-level channels for U-Net
+        sens_pools=2,  # number of pooling layers for sense est. U-Net
+        sens_chans=2,  # number of top-level channels for sense est. U-Net
         lr=0.0003,  # Adam learning rate
         lr_step_size=40,  # epoch at which to decrease learning rate
         lr_gamma=0.1,  # extent to which to decrease learning rate
@@ -221,6 +225,7 @@ def build_args():
         accelerator=backend,  # what distributed version to use
         seed=42,  # random seed
         deterministic=True,  # makes things slower, but deterministic
+        max_epochs=100
     )
 
     args = parser.parse_args()

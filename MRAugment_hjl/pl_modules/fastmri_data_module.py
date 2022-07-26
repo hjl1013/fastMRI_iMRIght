@@ -10,10 +10,10 @@ from typing import Callable, Optional, Union, List
 import fastmri
 import pytorch_lightning as pl
 import torch
-from data.fastmri_data import CombinedSliceDataset, SliceDataset
+from MRAugment_hjl.data.fastmri_data import CombinedSliceDataset, SliceDataset
 
 import numpy as np
-
+'''
 def worker_init_fn(worker_id):
     """
     Handle random seeding for all mask_func and augmentation pipeline.
@@ -65,6 +65,52 @@ def worker_init_fn(worker_id):
         if data.transform.mask_func is not None:
             data.transform.mask_func.rng.seed(seed % (2 ** 32 - 1))
         data.transform.seed_pipeline(seed % (2 ** 32 - 1))
+'''
+#TODO
+def worker_init_fn(worker_id):
+    """Handle random seeding for all mask_func."""
+    worker_info = torch.utils.data.get_worker_info()
+    data: Union[
+        SliceDataset, CombinedSliceDataset
+    ] = worker_info.dataset  # pylint: disable=no-member
+
+    # Check if we are using DDP
+    is_ddp = False
+    if torch.distributed.is_available():
+        if torch.distributed.is_initialized():
+            is_ddp = True
+
+    # for NumPy random seed we need it to be in this range
+    base_seed = worker_info.seed  # pylint: disable=no-member
+
+    if isinstance(data, CombinedSliceDataset):
+        for i, dataset in enumerate(data.datasets):
+            if dataset.transform.mask_func is not None:
+                if (
+                    is_ddp
+                ):  # DDP training: unique seed is determined by worker, device, dataset
+                    seed_i = (
+                        base_seed
+                        - worker_info.id
+                        + torch.distributed.get_rank()
+                        * (worker_info.num_workers * len(data.datasets))
+                        + worker_info.id * len(data.datasets)
+                        + i
+                    )
+                else:
+                    seed_i = (
+                        base_seed
+                        - worker_info.id
+                        + worker_info.id * len(data.datasets)
+                        + i
+                    )
+                dataset.transform.mask_func.rng.seed(seed_i % (2**32 - 1))
+    elif data.transform.mask_func is not None:
+        if is_ddp:  # DDP training: unique seed is determined by worker and device
+            seed = base_seed + torch.distributed.get_rank() * worker_info.num_workers
+        else:
+            seed = base_seed
+        data.transform.mask_func.rng.seed(seed % (2**32 - 1))
 
 class FastMriDataModule(pl.LightningDataModule):
     """
@@ -74,7 +120,7 @@ class FastMriDataModule(pl.LightningDataModule):
     up to process configurations independently of training modules.
 
     Note that subsampling mask and transform configurations are expected to be
-    done by the main client training scripts and passed into this data module.
+    done by the Main client training scripts and passed into this data module.
 
     For training with ddp be sure to set distributed_sampler=True to make sure
     that volumes are dispatched to the same GPU for the validation loop.
@@ -82,7 +128,7 @@ class FastMriDataModule(pl.LightningDataModule):
 
     def __init__(
         self,
-        data_path: Path,
+        data_path: Path, #TODO
         challenge: str,
         train_transform: Callable,
         val_transform: Callable,
@@ -179,7 +225,7 @@ class FastMriDataModule(pl.LightningDataModule):
                 sample_rates = [sample_rate, sample_rate]
             if volume_sample_rate is not None:
                 volume_sample_rates = [volume_sample_rate, volume_sample_rate]
-            dataset = CombinedSliceDataset(
+            dataset = CombinedSliceDataset( # 우선 밑에 SliceDataset에 대해서만 수정해줌 이 부분도 필요하면 나중에 수정 TODO
                 roots=data_paths,
                 transforms=data_transforms,
                 challenges=challenges,
@@ -188,14 +234,14 @@ class FastMriDataModule(pl.LightningDataModule):
                 use_dataset_cache=self.use_dataset_cache_file,
                 scanner_models=self.train_scanners,
             )
-        else:
+        else: #TODO
             if data_partition in ("test", "challenge") and self.test_path is not None:
                 data_path = self.test_path
             elif data_partition == "val" and self.combined_scanner_val:
                 data_path = [
                     self.data_path / f"{self.challenge}_train",
                     self.data_path / f"{self.challenge}_val",
-            ]
+                ]
             else:
                 data_path = self.data_path / f"{self.challenge}_{data_partition}"
             
@@ -291,7 +337,7 @@ class FastMriDataModule(pl.LightningDataModule):
         # dataset arguments
         parser.add_argument(
             "--data_path",
-            default="../../input/train/kspace",
+            default="/root/input_recon/kspace",
             type=Path,
             help="Path to fastMRI data root",
         )

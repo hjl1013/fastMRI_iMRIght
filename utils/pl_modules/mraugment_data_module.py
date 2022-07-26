@@ -76,7 +76,7 @@ class FastMriDataModule(pl.LightningDataModule):
     up to process configurations independently of training modules.
 
     Note that subsampling mask and transform configurations are expected to be
-    done by the main client training scripts and passed into this data module.
+    done by the Main client training scripts and passed into this data module.
 
     For training with ddp be sure to set distributed_sampler=True to make sure
     that volumes are dispatched to the same GPU for the validation loop.

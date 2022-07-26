@@ -211,7 +211,7 @@ class DataAugmentor:
     """
     High-level class encompassing the augmentation pipeline and augmentation
     probability scheduling. A DataAugmentor instance can be initialized in the 
-    main training code and passed to the DataTransform to be applied 
+    Main training code and passed to the DataTransform to be applied
     to the training data.
     """
         

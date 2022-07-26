@@ -7,7 +7,7 @@ import numpy as np
 from math import exp
 import torch
 import torchvision.transforms.functional as TF
-from mraugment.helpers import complex_crop_if_needed, crop_if_needed, complex_channel_first, complex_channel_last
+from MRAugment_hjl.mraugment.helpers import complex_crop_if_needed, crop_if_needed, complex_channel_first, complex_channel_last
 from fastmri.data import transforms as T
 from fastmri import fft2c, ifft2c, rss_complex, complex_abs
 
@@ -211,7 +211,7 @@ class DataAugmentor:
     """
     High-level class encompassing the augmentation pipeline and augmentation
     probability scheduling. A DataAugmentor instance can be initialized in the 
-    main training code and passed to the DataTransform to be applied 
+    Main training code and passed to the DataTransform to be applied
     to the training data.
     """
         
@@ -435,4 +435,5 @@ class DataAugmentor:
             type=int,
             help="If given, training slices will be center cropped to this size if larger along any dimension.",
         )
+
         return parser
