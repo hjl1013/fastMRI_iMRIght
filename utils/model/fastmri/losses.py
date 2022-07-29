@@ -1,5 +1,6 @@
 """
 Copyright (c) Facebook, Inc. and its affiliates.
+
 This source code is licensed under the MIT license found in the
 LICENSE file in the root directory of this source tree.
 """
@@ -28,14 +29,14 @@ class SSIMLoss(nn.Module):
         NP = win_size ** 2
         self.cov_norm = NP / (NP - 1)
 
-    def forward(self, X, Y, data_range):
-        X = X.unsqueeze(1)
-        Y = Y.unsqueeze(1)
+    def forward(self, X: torch.Tensor, Y: torch.Tensor, data_range: torch.Tensor):
+        assert isinstance(self.w, torch.Tensor)
+
         data_range = data_range[:, None, None, None]
         C1 = (self.k1 * data_range) ** 2
         C2 = (self.k2 * data_range) ** 2
-        ux = F.conv2d(X, self.w)
-        uy = F.conv2d(Y, self.w)
+        ux = F.conv2d(X, self.w)  # typing: ignore
+        uy = F.conv2d(Y, self.w)  #
         uxx = F.conv2d(X * X, self.w)
         uyy = F.conv2d(Y * Y, self.w)
         uxy = F.conv2d(X * Y, self.w)

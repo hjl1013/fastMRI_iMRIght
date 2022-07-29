@@ -18,6 +18,7 @@ import pathlib
 from argparse import ArgumentParser
 
 sys.path.insert(0, os.path.dirname(pathlib.Path(__file__).parent.absolute())   )
+sys.path.append('/root/fastMRI')
 
 import pytorch_lightning as pl
 from fastmri.data.mri_data import fetch_dir
@@ -26,7 +27,6 @@ from Main.pl_modules.varnet_module import VarNetModule
 
 # MRAugment-specific imports
 from Main.mraugment.data_augment import DataAugmentor
-# from MRAugment_hjl.mraugment.data_transforms import VarNetDataTransform #TODO
 from Main.data.transforms import VarNetDataTransform
 from Main.pl_modules.fastmri_data_module import FastMriDataModule
 
@@ -35,51 +35,44 @@ from pytorch_lightning.plugins import DDPPlugin
 import yaml
 from utils import load_args_from_config
 import torch.distributed
-# from Main.pl_modules.singlecoil_varnet_module import SinglecoilVarNetModule
+from pathlib import Path
 
 
 def cli_main(args):
     if args.verbose:
         print(args.__dict__)
-        
+
     pl.seed_everything(args.seed)
     # ------------
     # model
     # ------------
     if args.challenge == 'multicoil':
-        model = VarNetModule(
-            num_cascades=args.num_cascades,
-            pools=args.pools,
-            chans=args.chans,
-            sens_pools=args.sens_pools,
-            sens_chans=args.sens_chans,
-            lr=args.lr,
-            lr_step_size=args.lr_step_size,
-            lr_gamma=args.lr_gamma,
-            weight_decay=args.weight_decay,
-        )
-    # else:
-    #     assert args.challenge == 'singlecoil'
-    #     model = SinglecoilVarNetModule(
-    #         num_cascades=args.num_cascades,
-    #         pools=args.pools,
-    #         chans=args.chans,
-    #         lr=args.lr,
-    #         lr_step_size=args.lr_step_size,
-    #         lr_gamma=args.lr_gamma,
-    #         weight_decay=args.weight_decay,
-    #     )
+        if args.use_pretrain == True:
+            # model = load_model(VarNetModule, args.load_checkpoint)
+            model = VarNetModule.load_from_checkpoint(checkpoint_path=args.load_checkpoint)
+        else:
+            model = VarNetModule(
+                num_cascades=args.num_cascades,
+                pools=args.pools,
+                chans=args.chans,
+                sens_pools=args.sens_pools,
+                sens_chans=args.sens_chans,
+                lr=args.lr,
+                lr_step_size=args.lr_step_size,
+                lr_gamma=args.lr_gamma,
+                weight_decay=args.weight_decay,
+            )
 
     # -----------------
     # data augmentation
     # -----------------
-    # pass an external function to DataAugmentor that 
+    # pass an external function to DataAugmentor that
     # returns the current epoch for p scheduling
     current_epoch_fn = lambda: model.current_epoch
-    
+
     # initialize data augmentation pipeline
     augmentor = DataAugmentor(args, current_epoch_fn)
-    
+
     # ------------
     # data
     # ------------
@@ -89,14 +82,14 @@ def cli_main(args):
     # )
     # TODO
     mask = None
-    
+
     # use random masks for train transform, fixed masks for val transform
     # pass data augmentor to train transform only
     train_transform = VarNetDataTransform(augmentor=augmentor, mask_func=mask, use_seed=False)
     # train_transform = VarNetDataTransform(mask_func=mask, use_seed=False)
     val_transform = VarNetDataTransform(mask_func=mask)
     test_transform = VarNetDataTransform()
-    
+
     # ptl data module - this handles data loaders
     data_module = FastMriDataModule(
         data_path=args.data_path,
@@ -121,23 +114,27 @@ def cli_main(args):
     # ------------
     # trainer
     # ------------
-    trainer = pl.Trainer.from_argparse_args(args, 
+    trainer = pl.Trainer.from_argparse_args(args,
                                             plugins=DDPPlugin(find_unused_parameters=False),
                                             checkpoint_callback=True,
                                             callbacks=args.checkpoint_callback)
-    
+
     # Save all hyperparameters to .yaml file in the current log dir
     if torch.distributed.is_available():
         if torch.distributed.is_initialized():
             if torch.distributed.get_rank() == 0:
                 save_all_hparams(trainer, args)
-    else: 
-         save_all_hparams(trainer, args)
-            
+    else:
+        save_all_hparams(trainer, args)
+
     # ------------
     # run
     # ------------
-    trainer.fit(model, datamodule=data_module)
+    if args.use_pretrain:
+        trainer.fit(model, datamodule=data_module, ckpt_path=args.load_checkpoint)
+    else:
+        trainer.fit(model, datamodule=data_module)
+
 
 def save_all_hparams(trainer, args):
     if not os.path.exists(trainer.logger.log_dir):
@@ -146,26 +143,27 @@ def save_all_hparams(trainer, args):
     save_dict.pop('checkpoint_callback')
     with open(trainer.logger.log_dir + '/hparams.yaml', 'w') as f:
         yaml.dump(save_dict, f)
-    
+
+
 def build_args():
     parser = ArgumentParser()
 
     # basic args
     backend = "ddp"
-    num_gpus = 1 # if backend == "ddp" else 1 TODO
+    num_gpus = 1
     batch_size = 1
 
     # client arguments
     parser.add_argument(
-        '--config_file', 
-        default=None,   
-        type=pathlib.Path,          
+        '--config_file',
+        default=None,
+        type=pathlib.Path,
         help='If given, experiment configuration will be loaded from this yaml file.',
     )
     parser.add_argument(
-        '--verbose', 
-        default=False,   
-        action='store_true',          
+        '--verbose',
+        default=False,
+        action='store_true',
         help='If set, print all command line arguments at startup.',
     )
 
@@ -187,9 +185,21 @@ def build_args():
     parser.add_argument(
         "--accelerations",
         nargs="+",
-        default=[8],
+        default=[4],
         type=int,
         help="Acceleration rates to use for masks",
+    )
+    parser.add_argument(
+        "--load_checkpoint",
+        default='/root/fastMRI/MRAugment_hjl/mraugment_examples/lightning_logs/version_79/checkpoints/epoch2-ssim0.9364.ckpt',
+        type=Path,
+        help="path to load checkpoint",
+    )
+    parser.add_argument(
+        "--use_pretrain",
+        default=True,
+        type=bool,
+        help="Use pretrained or not",
     )
 
     # data config
@@ -199,19 +209,19 @@ def build_args():
         batch_size=batch_size,  # number of samples per batch
         test_path=None,  # path for test split, overwrites data_path
     )
-    
+
     # data augmentation config
     parser = DataAugmentor.add_augmentation_specific_args(parser)
 
     # module config
     parser = VarNetModule.add_model_specific_args(parser)
     parser.set_defaults(
-        num_cascades=2,  # number of unrolled iterations
-        pools=2,  # number of pooling layers for U-Net
-        chans=2,  # number of top-level channels for U-Net
-        sens_pools=2,  # number of pooling layers for sense est. U-Net
-        sens_chans=2,  # number of top-level channels for sense est. U-Net
-        lr=0.0003,  # Adam learning rate
+        num_cascades=7,  # number of unrolled iterations
+        pools=4,  # number of pooling layers for U-Net
+        chans=13,  # number of top-level channels for U-Net
+        sens_pools=4,  # number of pooling layers for sense est. U-Net
+        sens_chans=4,  # number of top-level channels for sense est. U-Net
+        lr=1e-2,  # Adam learning rate
         lr_step_size=40,  # epoch at which to decrease learning rate
         lr_gamma=0.1,  # extent to which to decrease learning rate
         weight_decay=0.0,  # weight regularization strength
@@ -225,15 +235,14 @@ def build_args():
         accelerator=backend,  # what distributed version to use
         seed=42,  # random seed
         deterministic=True,  # makes things slower, but deterministic
-        max_epochs=100
+        max_epochs=50
     )
 
     args = parser.parse_args()
-    
+
     # Load args if config file is given
     if args.config_file is not None:
         args = load_args_from_config(args)
-        
 
     args.checkpoint_callback = pl.callbacks.ModelCheckpoint(
         save_top_k=1,

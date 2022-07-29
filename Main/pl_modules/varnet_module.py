@@ -92,7 +92,7 @@ class VarNetModule(MriModule):
 
         self.loss = fastmri.SSIMLoss()
 
-    def forward(self, masked_kspace, mask, num_low_frequencies):
+    def forward(self, masked_kspace, mask, num_low_frequencies=None):
         return self.varnet(masked_kspace, mask, num_low_frequencies)
 
     def training_step(self, batch, batch_idx):
@@ -143,11 +143,11 @@ class VarNetModule(MriModule):
         }
 
     def configure_optimizers(self):
-        optim = torch.optim.Adam(
+        optim = torch.optim.RAdam(
             self.parameters(), lr=self.lr, weight_decay=self.weight_decay
         )
-        scheduler = torch.optim.lr_scheduler.StepLR(
-            optim, self.lr_step_size, self.lr_gamma
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optim, 10, eta_min=1e-6
         )
 
         return [optim], [scheduler]
@@ -196,7 +196,7 @@ class VarNetModule(MriModule):
 
         # training params (opt)
         parser.add_argument(
-            "--lr", default=0.0003, type=float, help="Adam learning rate"
+            "--lr", default=1e-2, type=float, help="RAdam learning rate"
         )
         parser.add_argument(
             "--lr_step_size",

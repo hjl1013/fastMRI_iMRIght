@@ -5,7 +5,6 @@ LICENSE file in the root directory of this source tree.
 """
 
 from skimage.metrics import structural_similarity
-from math import sqrt
 import h5py
 import numpy as np
 
@@ -44,30 +43,4 @@ def ssim_loss(gt, pred, maxval=None):
 
     ssim = ssim / gt.shape[0]
     return 1 - ssim
-
-def fftc(data, axes=(-2, -1), norm="ortho"):
-    """
-    Centered fast fourier transform
-    """
-    return np.fft.fftshift(
-        np.fft.fftn(np.fft.ifftshift(data, axes=axes), 
-                    axes=axes, 
-                    norm=norm), 
-        axes=axes
-    )
-
-
-def ifftc(data, axes=(-2, -1), norm="ortho"):
-    """
-    Centered inverse fast fourier transform
-    """
-    return np.fft.fftshift(
-        np.fft.ifftn(np.fft.ifftshift(data, axes=axes), 
-                     axes=axes, 
-                     norm=norm), 
-        axes=axes
-    )
-
-def rss_combine(data, axis, keepdims=False):
-    return np.sqrt(np.sum(np.square(np.abs(data)), axis, keepdims=keepdims))
 

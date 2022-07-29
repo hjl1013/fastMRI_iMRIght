@@ -1,6 +1,8 @@
 """
-This code is modified from https://github.com/facebookresearch/fastMRI/blob/master/fastmri/data/mri_data.py
-to add dataset filtering based on scanner type.
+Copyright (c) Facebook, Inc. and its affiliates.
+
+This source code is licensed under the MIT license found in the
+LICENSE file in the root directory of this source tree.
 """
 
 import logging
@@ -16,7 +18,7 @@ import h5py
 import numpy as np
 import torch
 import yaml
-import fastmri
+
 
 def et_query(
     root: etree.Element,
@@ -25,13 +27,16 @@ def et_query(
 ) -> str:
     """
     ElementTree query function.
+
     This can be used to query an xml document via ElementTree. It uses qlist
     for nested queries.
+
     Args:
         root: Root of the xml to search through.
         qlist: A list of strings for nested searches, e.g. ["Encoding",
             "matrixSize"]
         namespace: Optional; xml namespace to prepend query.
+
     Returns:
         The retrieved data as a string.
     """
@@ -55,14 +60,17 @@ def fetch_dir(
 ) -> Path:
     """
     Data directory fetcher.
+
     This is a brute-force simple way to configure data directories for a
     project. Simply overwrite the variables for `knee_path` and `brain_path`
     and this function will retrieve the requested subsplit of the data for use.
+
     Args:
         key: key to retrieve path from data_config_file. Expected to be in
             ("knee_path", "brain_path", "log_path").
         data_config_file: Optional; Default path config file to fetch path
             from.
+
     Returns:
         The path to the specified directory.
     """
@@ -105,7 +113,6 @@ class CombinedSliceDataset(torch.utils.data.Dataset):
         use_dataset_cache: bool = False,
         dataset_cache_file: Union[str, Path, os.PathLike] = "dataset_cache.pkl",
         num_cols: Optional[Tuple[int]] = None,
-        scanner_models: Optional[List[str]] = None,
     ):
         """
         Args:
@@ -133,8 +140,6 @@ class CombinedSliceDataset(torch.utils.data.Dataset):
                 information for faster load times.
             num_cols: Optional; If provided, only slices with the desired
                 number of columns will be considered.
-            scanner_models: list of strings, names of scanner models to be added to the 
-                dataset. If None given, all slices will be used (default)
         """
         if sample_rates is not None and volume_sample_rates is not None:
             raise ValueError(
@@ -170,7 +175,6 @@ class CombinedSliceDataset(torch.utils.data.Dataset):
                     use_dataset_cache=use_dataset_cache,
                     dataset_cache_file=dataset_cache_file,
                     num_cols=num_cols,
-                    scanner_models=scanner_models,
                 )
             )
 
@@ -194,7 +198,7 @@ class SliceDataset(torch.utils.data.Dataset):
 
     def __init__(
         self,
-        root: Union[str, Path, os.PathLike, List[str], List[Path]], #TODO
+        root: Union[str, Path, os.PathLike],
         challenge: str,
         transform: Optional[Callable] = None,
         use_dataset_cache: bool = False,
@@ -202,7 +206,6 @@ class SliceDataset(torch.utils.data.Dataset):
         volume_sample_rate: Optional[float] = None,
         dataset_cache_file: Union[str, Path, os.PathLike] = "dataset_cache.pkl",
         num_cols: Optional[Tuple[int]] = None,
-        scanner_models: Optional[List[str]] = None,
     ):
         """
         Args:
@@ -227,8 +230,6 @@ class SliceDataset(torch.utils.data.Dataset):
                 information for faster load times.
             num_cols: Optional; If provided, only slices with the desired
                 number of columns will be considered.
-            scanner_models: list of strings, names of scanner models to be added to the 
-                dataset. If None given, all slices will be used (default)
         """
         if challenge not in ("singlecoil", "multicoil"):
             raise ValueError('challenge should be either "singlecoil" or "multicoil"')
@@ -261,47 +262,16 @@ class SliceDataset(torch.utils.data.Dataset):
 
         # check if our dataset is in the cache
         # if there, use that metadata, if not, then regenerate the metadata
-        if isinstance(root, list):
-            # Cannot use cache for combined dataset
-            assert use_dataset_cache is False
-            not_cached = True
-        else:
-            not_cached = (dataset_cache.get(root) is None)
-            
-        if not_cached or not use_dataset_cache:
-            # combine files from multiple directories if given
-            # this is used to combine slices of the same scanner type in the validation set
-            if isinstance(root, list):
-                files = []
-                for r in root:
-                    files += list(Path(r).iterdir())
-            else:        
-                files = list(Path(root).iterdir())
-            files = sorted(files)
+        if dataset_cache.get(root) is None or not use_dataset_cache:
+            files = list(Path(root).iterdir())
+            for fname in sorted(files):
+                metadata, num_slices = self._retrieve_metadata(fname)
 
-            #TODO
-            for file in files:
-                metadata, num_slices = self._retrieve_metadata(file)
-                # num_slices = self._retrieve_metadata(fname)
-                
-                # only add to dataset if scanner type is desired or we don't filter scanners
-                if scanner_models is None:
-                    add_to_dataset = True
-                elif metadata['scanner_model'] in scanner_models:
-                    add_to_dataset = True
-                else:
-                    add_to_dataset = False
-                
-                if add_to_dataset:
-                    self.examples += [
-                        (file, slice_ind, metadata) for slice_ind in range(num_slices)
-                    ]
-                # if True:
-                #     self.examples += [
-                #         (fname, slice_ind) for slice_ind in range(num_slices)
-                #     ]
+                self.examples += [
+                    (fname, slice_ind, metadata) for slice_ind in range(num_slices)
+                ]
 
-            if not_cached and use_dataset_cache:
+            if dataset_cache.get(root) is None and use_dataset_cache:
                 dataset_cache[root] = self.examples
                 logging.info(f"Saving dataset cache to {self.dataset_cache_file}.")
                 with open(self.dataset_cache_file, "wb") as f:
@@ -333,16 +303,35 @@ class SliceDataset(torch.utils.data.Dataset):
 
     def _retrieve_metadata(self, fname):
         with h5py.File(fname, "r") as hf:
+            et_root = etree.fromstring(hf["ismrmrd_header"][()])
+
+            enc = ["encoding", "encodedSpace", "matrixSize"]
+            enc_size = (
+                int(et_query(et_root, enc + ["x"])),
+                int(et_query(et_root, enc + ["y"])),
+                int(et_query(et_root, enc + ["z"])),
+            )
+            rec = ["encoding", "reconSpace", "matrixSize"]
+            recon_size = (
+                int(et_query(et_root, rec + ["x"])),
+                int(et_query(et_root, rec + ["y"])),
+                int(et_query(et_root, rec + ["z"])),
+            )
+
+            lims = ["encoding", "encodingLimits", "kspace_encoding_step_1"]
+            enc_limits_center = int(et_query(et_root, lims + ["center"]))
+            enc_limits_max = int(et_query(et_root, lims + ["maximum"])) + 1
+
+            padding_left = enc_size[1] // 2 - enc_limits_center
+            padding_right = padding_left + enc_limits_max
+
             num_slices = hf["kspace"].shape[0]
-            target = hf['image_label']
-            recon_size = target.shape[1:]
 
         metadata = {
-            "padding_left": 0,
-            "padding_right": 0,
-            "encoding_size": None,
+            "padding_left": padding_left,
+            "padding_right": padding_right,
+            "encoding_size": enc_size,
             "recon_size": recon_size,
-            "scanner_model": None,
         }
 
         return metadata, num_slices
@@ -355,19 +344,17 @@ class SliceDataset(torch.utils.data.Dataset):
 
         with h5py.File(fname, "r") as hf:
             kspace = hf["kspace"][dataslice]
-            mask = np.array(hf["mask"]) if "mask" in hf else None
-            masked_kspace = kspace * mask
-            target = hf['image_label'][dataslice] if 'image_label' in hf else None
 
-        # with h5py.File(fname_image, "r") as hf:
-        #     target = hf['image_label'][dataslice] #if self.recons_key in hf else None
+            mask = np.asarray(hf["mask"]) if "mask" in hf else None
+
+            target = hf[self.recons_key][dataslice] if self.recons_key in hf else None
 
             attrs = dict(hf.attrs)
             attrs.update(metadata)
 
         if self.transform is None:
-            sample = (masked_kspace, mask, target, attrs, fname.name, dataslice)
+            sample = (kspace, mask, target, attrs, fname.name, dataslice)
         else:
-            sample = self.transform(masked_kspace, mask, target, attrs, fname.name, dataslice)
+            sample = self.transform(kspace, mask, target, attrs, fname.name, dataslice)
 
         return sample

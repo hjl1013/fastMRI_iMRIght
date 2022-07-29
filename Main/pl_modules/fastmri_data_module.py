@@ -13,60 +13,7 @@ import torch
 from Main.data.fastmri_data import CombinedSliceDataset, SliceDataset
 
 import numpy as np
-'''
-def worker_init_fn(worker_id):
-    """
-    Handle random seeding for all mask_func and augmentation pipeline.
-    It is important to provide different random seed to each worker on each GPU
-    for diverse augmentations.
-    """
-    worker_info = torch.utils.data.get_worker_info()
-    data: Union[
-        SliceDataset, CombinedSliceDataset
-    ] = worker_info.dataset  # pylint: disable=no-member
 
-    # Check if we are using DDP
-    is_ddp = False
-    if torch.distributed.is_available():
-        if torch.distributed.is_initialized():
-            is_ddp = True
-
-    # for NumPy random seed we need it to be in this range
-    base_seed = worker_info.seed  # pylint: disable=no-member
-
-    if isinstance(data, CombinedSliceDataset):
-        for i, dataset in enumerate(data.datasets):
-            if (
-                is_ddp
-            ):  # DDP training: unique seed is determined by worker, device, dataset
-                seed_i = (
-                    base_seed
-                    - worker_info.id
-                    + torch.distributed.get_rank()
-                    * (worker_info.num_workers * len(data.datasets))
-                    + worker_info.id * len(data.datasets)
-                    + i
-                )
-            else:
-                seed_i = (
-                    base_seed
-                    - worker_info.id
-                    + worker_info.id * len(data.datasets)
-                    + i
-                )
-            if dataset.transform.mask_func is not None:
-                dataset.transform.mask_func.rng.seed(seed_i % (2 ** 32 - 1))
-            dataset.transform.seed_pipeline(seed_i % (2 ** 32 - 1))
-    else:
-        if is_ddp:  # DDP training: unique seed is determined by worker and device
-            seed = base_seed + torch.distributed.get_rank() * worker_info.num_workers
-        else:
-            seed = base_seed
-        if data.transform.mask_func is not None:
-            data.transform.mask_func.rng.seed(seed % (2 ** 32 - 1))
-        data.transform.seed_pipeline(seed % (2 ** 32 - 1))
-'''
-#TODO
 def worker_init_fn(worker_id):
     """Handle random seeding for all mask_func."""
     worker_info = torch.utils.data.get_worker_info()
