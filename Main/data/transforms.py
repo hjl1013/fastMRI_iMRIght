@@ -256,16 +256,6 @@ def normalize_instance(
     return normalize(data, mean, std, eps), mean, std
 
 
-def create_target(kspace, crop_size):
-    kspace_torch = to_tensor(kspace)
-    image = fastmri.ifft2c(kspace_torch)
-    image = complex_center_crop(image, crop_size)
-    image = fastmri.complex_abs(image)
-    image = fastmri.rss(image, dim = 1)
-
-    return image
-
-
 class UnetSample(NamedTuple):
     """
     A subsampled image for U-Net reconstruction.
@@ -430,7 +420,7 @@ class VarNetDataTransform:
     Data Transformer for training VarNet models.
     """
 
-    def __init__(self, augmentor = None, mask_func: Optional[MaskFunc] = None, use_seed: bool = True):
+    def __init__(self, augmentor=None, mask_func: Optional[MaskFunc] = None, use_seed: bool = True):
         """
         Args:
             mask_func: Optional; A function that can create a mask of
