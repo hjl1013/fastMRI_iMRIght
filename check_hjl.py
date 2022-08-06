@@ -72,10 +72,10 @@ def check_target():
     # right = torch.nonzero(mask.squeeze()[cent:] == 0)[0] + cent
 #
 def print_recon():
-    with h5py.File("/root/result/VarNet_pretrained/reconstructions/brain1.h5", "r") as hf:
+    with h5py.File("/root/input/leaderboard/image/brain_test1.h5", "r") as hf:
         print(hf.keys())
-        recon_image = np.array(hf['reconstruction'])
-    with h5py.File("/root/input/val/image/brain1.h5", "r") as hf:
+        recon_image = np.array(hf['image_label'])
+    with h5py.File("/root/leaderboard_recon/kspace/brain_test1.h5", "r") as hf:
         target_image = np.array(hf['image_label'])
         max = hf.attrs['max']
 
@@ -103,7 +103,7 @@ def print_recon():
 
 def data_reconstruct():
     cnt = 1
-    tot = len(Path("/root/input/leaderboard/kspace").iterdir())
+    tot = len(list(Path("/root/input/leaderboard/kspace").iterdir()))
     for fname in Path("/root/input/leaderboard/kspace").iterdir():
         print(cnt, " / ", tot)
         with h5py.File(str(fname), "r") as hf_k, h5py.File(str(Path("/root/input/leaderboard/image") / fname.name), "r") as hf_i, h5py.File(str(Path("/root/leaderboard_recon/kspace")/ fname.name), "w") as whf:
@@ -116,7 +116,7 @@ def data_reconstruct():
             for key in hf_i.attrs:
                 whf.attrs[key] = hf_i.attrs[key]
             for key in hf_k.attrs:
-                whf.attrs[key] = hf_i.attrs[key]
+                whf.attrs[key] = hf_k.attrs[key]
             print(fname.name + " created attributes")
 
         cnt += 1
@@ -125,11 +125,12 @@ def data_reconstruct():
 def check_file(file):
     with h5py.File(file, "r") as hf:
         print(hf.keys())
-        # plt.figure()
-        # plt.subplot(111)
-        # plt.imshow(hf['reconstruction'][0])
-        # plt.show()
+        plt.figure()
+        plt.subplot(111)
+        plt.imshow(hf['reconstruction'][0])
+        plt.show()
 
 
-check_file("/root/input_recon/kspace/multicoil_val/brain1.h5")
-# print_recon()
+# check_file("/root/result/VarNet_SNU/reconstructions/brain_test1.h5")
+print_recon()
+# data_reconstruct()

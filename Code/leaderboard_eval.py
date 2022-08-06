@@ -19,8 +19,8 @@ class SSIM(SSIMLoss):
         if len(Y.shape) != 2:
             raise NotImplementedError('Dimension of first input is {} rather than 2'.format(len(Y.shape)))
             
-        X = X.unsqueeze(0).unsqueeze(0)
-        Y = Y.unsqueeze(0).unsqueeze(0)
+        X = X.unsqueeze(0).unsqueeze(0).float()
+        Y = Y.unsqueeze(0).unsqueeze(0).float()
         #data_range = data_range[:, None, None, None]
         C1 = (self.k1 * data_range) ** 2
         C2 = (self.k2 * data_range) ** 2
@@ -48,13 +48,13 @@ def forward(args):
     device = torch.device(f'cuda:{args.GPU_NUM}' if torch.cuda.is_available() else 'cpu')
     torch.cuda.set_device(device)
     
-    leaderboard_data = glob.glob(os.path.join(args.leaderboard_data_path,'*.h5'))
-    if len(leaderboard_data) != 58:
-        raise  NotImplementedError('Leaderboard Data Size Should Be 58')
+    # leaderboard_data = glob.glob(os.path.join(args.leaderboard_data_path,'*.h5'))
+    # if len(leaderboard_data) != 58:
+    #     raise  NotImplementedError('Leaderboard Data Size Should Be 58')
     
-    your_data = glob.glob(os.path.join(args.your_data_path,'*.h5'))
-    if len(your_data) != 58:
-        raise  NotImplementedError('Your Data Size Should Be 58')           
+    # your_data = glob.glob(os.path.join(args.your_data_path,'*.h5'))
+    # if len(your_data) != 58:
+    #     raise  NotImplementedError('Your Data Size Should Be 58')
     
     ssim_total = 0
     idx = 0
@@ -102,11 +102,11 @@ if __name__ == '__main__':
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     
     parser.add_argument('-g', '--GPU_NUM', type=int, default=0)
-    parser.add_argument('-lp', '--leaderboard_data_path', type=str, default='../Data/image_Leaderboard/')
+    parser.add_argument('-lp', '--leaderboard_data_path', type=str, default='/root/input/leaderboard/image/')
     """
     Modify Path Below To Test Your Results
     """
-    parser.add_argument('-yp', '--your_data_path', type=str, default='../result/test_Unet/reconstructions_forward/')
+    parser.add_argument('-yp', '--your_data_path', type=str, default='/root/result/VarNet_SNU/reconstructions/')
     parser.add_argument('-key', '--output_key', type=str, default='reconstruction')
     
     args = parser.parse_args()

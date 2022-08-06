@@ -1,7 +1,5 @@
 from pathlib import Path
 import torch
-import tqdm
-import requests
 
 from fastmri.models import VarNet
 from Main.pl_modules.varnet_module import VarNetModule
@@ -10,36 +8,28 @@ from Main.data.transforms import VarNetDataTransform
 from utils.data.load_data import create_data_loaders
 
 
-def download_model(url, fname):
-    response = requests.get(url, timeout=10, stream=True)
-
-    chunk_size = 8 * 1024 * 1024  # 8 MB chunks
-    total_size_in_bytes = int(response.headers.get("content-length", 0))
-    progress_bar = tqdm(
-        desc="Downloading state_dict",
-        total=total_size_in_bytes,
-        unit="iB",
-        unit_scale=True,
-    )
-
-    with open(fname, "wb") as fh:
-        for chunk in response.iter_content(chunk_size):
-            progress_bar.update(len(chunk))
-            fh.write(chunk)
-
-
 def get_model(model_name: str, model_path: Path, test_path: Path, challenge: str):
     """
     input: model name path
-    output: model and data_module
+    output: model and data loader
     """
-    model_dict = {}
-    model_dict["VarNet_ours"] = "/root/models/VarNet_ours/epoch31-ssim0.9470.ckpt"
-    model_dict["VarNet_pretrained"] = "/root/models/VarNet_pretrained/brain_leaderboard_state_dict.pt"
 
     print(
         f"Trying to load model {model_name}..."
     )
+
+    # preprocessing
+    model_dict = {
+        "VarNet_ours": "/root/models/VarNet_ours/epoch31-ssim0.9470.ckpt",
+        "VarNet_pretrained": "/root/models/VarNet_pretrained/brain_leaderboard_state_dict.pt",
+        "VarNet_SNU": "/root/models/VarNet_SNU/best_model.pt",
+    }
+
+    test_path_dict = {
+        "VarNet_ours": Path("/root/leaderboard_recon/kspace"),
+        "VarNet_pretrained": Path("/root/input/leaderboard"),
+        "VarNet_SNU": Path("/root/input/leaderboard"),
+    }
 
     if model_path is not None:
         assert model_path.exists(), f"file {model_path} doesn't exist"
@@ -48,6 +38,11 @@ def get_model(model_name: str, model_path: Path, test_path: Path, challenge: str
         print("Using default model")
         model_path = model_dict[model_name]
 
+    if test_path is None:
+        print("Using default test path")
+        test_path = test_path_dict[model_name]
+
+    # prepare model and data loaders of model_name
     if model_name == 'VarNet_ours':
         model = VarNetModule.load_from_checkpoint(model_path)
 
@@ -72,6 +67,14 @@ def get_model(model_name: str, model_path: Path, test_path: Path, challenge: str
         pretrained = torch.load(model_path)
         model.load_state_dict(pretrained)
 
-        data_loader = create_data_loaders(data_path=test_path, args=None, isforward=True)
+        data_loader = create_data_loaders(data_path=test_path, isforward=False, for_pretrained=True)
+
+    elif model_name == 'VarNet_SNU':
+        model = VarNet(num_cascades=3)
+
+        pretrained = torch.load(model_path)
+        model.load_state_dict(pretrained['model'])
+
+        data_loader = create_data_loaders(data_path=test_path, isforward=False, for_pretrained=True)
 
     return model, data_loader
