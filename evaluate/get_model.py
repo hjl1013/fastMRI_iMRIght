@@ -38,7 +38,9 @@ def get_model(model_name: str, model_path: Path, test_path: Path, challenge: str
         print("Using default model")
         model_path = model_dict[model_name]
 
-    if test_path is None:
+    if test_path is not None:
+        assert test_path.exists(), f"file {test_path} doesn't exist"
+    else:
         print("Using default test path")
         test_path = test_path_dict[model_name]
 
