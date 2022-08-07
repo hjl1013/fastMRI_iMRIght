@@ -18,6 +18,7 @@ from tqdm import tqdm
 import fastmri
 import Main.data.transforms as T
 from Main.data.fastmri_data import SliceDataset
+from Main.pl_modules.varnet_module import VarNetModule
 from fastmri.models import VarNet
 
 from fastmri.evaluate import ssim
@@ -71,8 +72,12 @@ def run_inference(challenge, state_dict_file, data_path, output_path, device):
             download_model(url_root + MODEL_FNAMES[challenge], MODEL_FNAMES[challenge])
 
         state_dict_file = MODEL_FNAMES[challenge]
+        model.load_state_dict(torch.load(state_dict_file))
 
-    model.load_state_dict(torch.load(state_dict_file))
+    else:
+        model = VarNetModule.load_from_checkpoint(state_dict_file)
+        # state_dict_file is our trained model
+
     model = model.eval()
 
     # data loader setup
@@ -141,7 +146,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--output_path",
         type=Path,
-        default="/root/fastMRI/result/VarNet_pretrained",
+        default="/root/result/VarNet_pretrained",
         help="Path for saving reconstructions",
     )
 

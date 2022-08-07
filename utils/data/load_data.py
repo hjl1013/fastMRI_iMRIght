@@ -6,13 +6,14 @@ from pathlib import Path
 import numpy as np
 
 class SliceData(Dataset):
-    def __init__(self, root, transform, input_key, target_key, forward=False):
+    def __init__(self, root, transform, input_key, target_key, forward=False, for_pretrained=False):
         self.transform = transform
         self.input_key = input_key
         self.target_key = target_key
         self.forward = forward
         self.image_examples = []
         self.kspace_examples = []
+        self.for_pretrained = for_pretrained
 
         if not forward:
             image_files = list(Path(root / "image").iterdir())
@@ -59,26 +60,32 @@ class SliceData(Dataset):
                 target = hf[self.target_key][dataslice]
                 attrs = dict(hf.attrs)
 
-        return self.transform(mask, input, target, attrs, kspace_fname.name, dataslice)
+        return self.transform(mask, input, target, attrs, kspace_fname.name, dataslice, self.for_pretrained)
 
 
-def create_data_loaders(data_path, args, isforward=False):
-    if isforward == False:
+def create_data_loaders(data_path, args=None, isforward=False, for_pretrained=False):
+    if isforward == False and args is not None:
+        input_key = args.input_key
         max_key_ = args.max_key
         target_key_ = args.target_key
+        batch_size = args.batch_size
     else:
-        max_key_ = -1
-        target_key_ = -1
+        input_key = "kspace"
+        max_key_ = "max"
+        target_key_ = "image_label"
+        batch_size = 1
+
     data_storage = SliceData(
         root=data_path,
         transform=DataTransform(isforward, max_key_),
-        input_key=args.input_key,
+        input_key=input_key,
         target_key=target_key_,
-        forward = isforward
+        forward=isforward,
+        for_pretrained=for_pretrained
     )
 
     data_loader = DataLoader(
         dataset=data_storage,
-        batch_size=args.batch_size
+        batch_size=batch_size
     )
     return data_loader
