@@ -127,10 +127,12 @@ def check_file(file):
         print(hf.keys())
         plt.figure()
         plt.subplot(111)
-        plt.imshow(hf['reconstruction'][0])
+        plt.imshow(hf['image_label'][0])
         plt.show()
 
 
-# check_file("/root/result/VarNet_SNU/reconstructions/brain_test1.h5")
-print_recon()
+check_file("/root/input/leaderboard/image/brain_test1.h5")
+# print_recon()
 # data_reconstruct()
+# ensemble_VarNet_pretrained_VarNet_SNU
+# /root/result/ensemble_VarNet_pretrained_VarNet_SNU/reconstructions/brain_test1.h5
