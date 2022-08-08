@@ -106,7 +106,7 @@ if __name__ == '__main__':
     """
     Modify Path Below To Test Your Results
     """
-    parser.add_argument('-yp', '--your_data_path', type=str, default='/root/result/VarNet_SNU/reconstructions/')
+    parser.add_argument('-yp', '--your_data_path', type=str, default='/root/result/ensemble_VarNet_pretrained_VarNet_SNU/reconstructions/')
     parser.add_argument('-key', '--output_key', type=str, default='reconstruction')
     
     args = parser.parse_args()

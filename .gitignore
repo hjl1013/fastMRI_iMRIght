@@ -1,0 +1,9 @@
+# for mac
+./DS_Store
+*/ .DS_Store
+
+# for pycharm server connection
+.idea
+
+# check file
+check_hjl.py
