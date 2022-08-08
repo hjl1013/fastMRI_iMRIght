@@ -1,5 +1,5 @@
 # for mac
-./DS_Store
+.DS_Store
 */ .DS_Store
 
 # for pycharm server connection
@@ -7,3 +7,6 @@
 
 # check file
 check_hjl.py
+
+# for XPDNet
+fastmri_recon

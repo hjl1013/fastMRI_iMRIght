@@ -4,6 +4,11 @@ from pathlib import Path
 import numpy as np
 import torch
 from tqdm import tqdm
+import os
+import sys
+
+sys.path.insert(0, os.path.dirname(Path(__file__).parent.absolute()))
+sys.path.append('/root/fastMRI_hjl')
 
 import fastmri
 from fastmri import evaluate
@@ -12,6 +17,28 @@ from Main.pl_modules.fastmri_data_module import FastMriDataModule
 
 from evaluate.get_model import get_model
 import matplotlib.pyplot as plt
+import h5py
+
+
+def get_image_path(model_name, test_path):
+    assert test_path is not None, "cannot use default test path"
+    if model_name == "VarNet_ours":
+        return test_path
+    elif model_name == "VarNet_SNU" or model_name == "VarNet_pretrained":
+        return test_path / "image"
+
+
+def save_imtoim_input(reconstructions, image_path, imtoim_input_path):
+    imtoim_input_path.mkdir(exist_ok=True, parents=True)
+    for fname, recons in reconstructions.items():
+        assert (image_path / fname).exists(), f"no file named {fname} in {image_path}"
+        with h5py.File(imtoim_input_path / fname, "w") as hf, h5py.File(image_path / fname, "r") as hf_i:
+            hf.create_dataset("image_input", data=recons)
+            for key in hf_i:
+                if key != "image_input":
+                    hf.create_dataset(key, data=hf_i[key])
+            for key in hf_i.attrs:
+                hf.attrs[key] = hf_i.attrs[key]
 
 
 def inference_step(model, batch, device, vol_info, outputs, calculate_loss, save_recon):
@@ -100,7 +127,6 @@ def run_inference(args):
     vol_info = {}
     outputs = {}
 
-    # torch.multiprocessing.set_sharing_strategy('file_system')
     with torch.no_grad():
         for batch in tqdm(data_loader, desc="Running inference"):
             vol_info, outputs = inference_step(model, batch, args.device, vol_info, outputs, args.calculate_loss, args.save_recon)
@@ -112,6 +138,12 @@ def run_inference(args):
         # save reconstruction
         if args.save_recon:
             fastmri.save_reconstructions(outputs, args.output_path)
+
+        # save as imtoim input
+        if args.save_imtoim_input:
+            image_path = get_image_path(args.model_name, args.test_path)
+            imtoim_input_path = get_image_path(args.model_name, args.imtoim_input_path)
+            save_imtoim_input(outputs, image_path, imtoim_input_path)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -132,15 +164,16 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--model_name",
-        default="VarNet_ours",
+        default="VarNet_SNU",
         type=str,
         choices=['VarNet_pretrained', 'VarNet_ours', 'VarNet_SNU'],
         help="Name of model"
     )
     parser.add_argument(
         "--model_file_name",
-        default=None,
+        default="best_model_ep11_0.028276184172645012.pt",
         type=str,
+        required=True,
         help="Path to saved state_dict (will download if not provided)",
     )
     parser.add_argument(
@@ -153,18 +186,33 @@ if __name__ == "__main__":
         "--calculate_loss",
         default=False,
         type=bool,
+        required=True,
         help="Whether to calculate ssim loss",
     )
     parser.add_argument(
         "--save_recon",
         default=True,
         type=bool,
+        required=True,
+        help="Whether to save reconstructed images"
+    )
+    parser.add_argument(
+        "--save_imtoim_input",
+        default=False,
+        type=bool,
+        required=True,
+        help="Whether to save reconstructed images as imtoim input"
+    )
+    parser.add_argument(
+        "--imtoim_input_path",
+        default="/root/input_imtoim/train",
+        type=Path,
         help="Whether to save reconstructed images"
     )
 
     args = parser.parse_args()
 
-    args.output_path = '/root/result' / Path(args.model_name) / 'reconstructions'
+    args.output_path = '/root/result' / Path(args.model_name) / args.model_file_name / 'reconstructions'
     if args.model_file_name is not None:
         args.state_dict_file = '/root/models' / Path(args.model_name) / args.model_file_name
     else:
