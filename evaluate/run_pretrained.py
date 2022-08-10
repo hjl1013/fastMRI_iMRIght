@@ -9,15 +9,29 @@ import fastmri
 from fastmri import evaluate
 import Main.data.transforms as T
 from Main.pl_modules.fastmri_data_module import FastMriDataModule
+from fastmri_recon.data.utils.multicoil.smap_extract import extract_smaps
 
 from evaluate.get_model import get_model
 import matplotlib.pyplot as plt
 
 
-def inference_step(model, batch, device, vol_info, outputs, calculate_loss, save_recon):
-    crop_size = batch.target.shape[-2:]
-    output = model(batch.masked_kspace.to(device), batch.mask.to(device)).cpu()
-    output = T.center_crop(output, crop_size)
+def inference_step(model_name, model, batch, device, vol_info, outputs, calculate_loss, save_recon):
+    if model_name == "XPDNet_pretrained":
+        smaps = extract_smaps(batch.masked_kspace, low_freq_percentage=8)
+        output = model([
+            batch.masked_kspace,
+            batch.mask,
+            smaps,
+            batch.crop_size
+        ])
+        target = batch.target
+        masked_kspace = batch.masked_kspace
+    else:
+        crop_size = batch.target.shape[-2:]
+        output = model(batch.masked_kspace.to(device), batch.mask.to(device)).cpu()
+        output = T.center_crop(output, crop_size)
+        target = batch.target.cpu()
+        masked_kspace = batch.masked_kspace.cpu()
 
     for i, f in enumerate(batch.fname):
         if f not in vol_info:
@@ -29,14 +43,14 @@ def inference_step(model, batch, device, vol_info, outputs, calculate_loss, save
             vol_info[f].append(
                 (
                     output[i].cpu(),
-                    batch.masked_kspace[i].cpu(),
+                    masked_kspace[i],
                     batch.slice_num[i],
-                    batch.target[i].cpu(),
+                    target[i],
                     batch.max_value[i],
                 )
             )
         if save_recon:
-            outputs[f].append(output[i].cpu().tolist())
+            outputs[f].append(output[i].tolist())
 
     return vol_info, outputs
 
@@ -102,7 +116,7 @@ def run_inference(args):
 
     with torch.no_grad():
         for batch in tqdm(data_loader, desc="Running inference"):
-            vol_info, outputs = inference_step(model, batch, args.device, vol_info, outputs, args.calculate_loss, args.save_recon)
+            vol_info, outputs = inference_step(args.model_name, model, batch, args.device, vol_info, outputs, args.calculate_loss, args.save_recon)
 
         # evaluate and print
         if args.calculate_loss:
@@ -132,16 +146,15 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--model_name",
-        default="VarNet_SNU",
+        default='XPDNet_pretrained',
         type=str,
-        choices=['VarNet_pretrained', 'VarNet_ours', 'VarNet_SNU'],
+        choices=['VarNet_pretrained', 'VarNet_ours', 'VarNet_SNU', 'XPDNet_pretrained'],
         help="Name of model"
     )
     parser.add_argument(
         "--model_file_name",
-        default="best_model_ep11_0.028276184172645012.pt",
+        default="model_weights.h5",
         type=str,
-        required=True,
         help="Path to saved state_dict (will download if not provided)",
     )
     parser.add_argument(

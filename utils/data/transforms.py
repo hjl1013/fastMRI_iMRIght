@@ -1,6 +1,8 @@
 import numpy as np
 import torch
 from typing import Dict, NamedTuple, Optional, Sequence, Tuple, Union
+import tensorflow as tf
+
 
 def to_tensor(data):
     """
@@ -12,6 +14,24 @@ def to_tensor(data):
         torch.Tensor: PyTorch version of data
     """
     return torch.from_numpy(data)
+
+class DataTransform:
+    def __init__(self, isforward, max_key):
+        self.isforward = isforward
+        self.max_key = max_key
+    def __call__(self, mask, input, target, attrs, fname, slice):
+        if not self.isforward:
+            target = to_tensor(target)
+            maximum = attrs[self.max_key]
+        else:
+            target = -1
+            maximum = -1
+        
+        kspace = to_tensor(input * mask)
+        kspace = torch.stack((kspace.real, kspace.imag), dim=-1)
+        mask = torch.from_numpy(mask.reshape(1, 1, kspace.shape[-2], 1).astype(np.float32)).byte()
+
+        return mask, kspace, target, maximum, fname, slice
 
 class VarNetSample(NamedTuple):
     """
@@ -38,32 +58,86 @@ class VarNetSample(NamedTuple):
     max_value: float
     crop_size: Tuple[int, int]
 
-class DataTransform:
+class VarNetDataTransform:
     def __init__(self, isforward, max_key):
         self.isforward = isforward
         self.max_key = max_key
-    def __call__(self, mask, input, target, attrs, fname, slice, for_pretrained=False):
+
+    def __call__(self, mask, input, target, attrs, fname, slice):
         if not self.isforward:
             target = to_tensor(target)
             maximum = attrs[self.max_key]
         else:
             target = -1
             maximum = -1
-        
+
         kspace = to_tensor(input * mask)
         kspace = torch.stack((kspace.real, kspace.imag), dim=-1)
         mask = torch.from_numpy(mask.reshape(1, 1, kspace.shape[-2], 1).astype(np.float32)).byte()
 
-        if for_pretrained:
-            return VarNetSample(
-                masked_kspace=kspace,
-                mask=mask,
-                num_low_frequencies=0,
-                target=target,
-                fname=fname,
-                slice_num=slice,
-                max_value=maximum,
-                crop_size=(384, 384)
-            )
+        return VarNetSample(
+            masked_kspace=kspace,
+            mask=mask,
+            num_low_frequencies=0,
+            target=target,
+            fname=fname,
+            slice_num=slice,
+            max_value=maximum,
+            crop_size=(384, 384)
+        )
+
+class XPDNetSample(NamedTuple):
+    """
+    A sample of masked k-space for variational network reconstruction.
+
+    Args:
+        masked_kspace: k-space after applying sampling mask.
+        mask: The applied sampling mask.
+        num_low_frequencies: The number of samples for the densely-sampled
+            center.
+        target: The target image (if applicable).
+        fname: File name.
+        slice_num: The slice index.
+        max_value: Maximum image value.
+        crop_size: The size to crop the final image.
+    """
+
+    masked_kspace: torch.Tensor
+    mask: torch.Tensor
+    num_low_frequencies: Optional[int]
+    target: torch.Tensor
+    fname: str
+    slice_num: int
+    max_value: float
+    crop_size: Tuple[int, int]
+
+class XPDNetDataTransform:
+    def __init__(self, isforward, max_key):
+        self.isforward = isforward
+        self.max_key = max_key
+
+    def __call__(self, mask, input, target, attrs, fname, slice):
+        if not self.isforward:
+            target = tf.convert_to_tensor(target, dtype=tf.float32)
+            maximum = attrs[self.max_key]
         else:
-            return mask, kspace, target, maximum, fname, slice
+            target = -1
+            maximum = -1
+
+        kspace = tf.convert_to_tensor(input, dtype=tf.complex64) * 1e6
+        mask = tf.convert_to_tensor(mask, dtype=tf.float32)
+        masked_kspace = tf.cast(mask, dtype=kspace.dtype) * kspace
+        mask_expanded = mask[None, None, :]
+        fourier_mask = tf.dtypes.cast(mask_expanded, tf.uint8)
+        kspace_channeled = masked_kspace[..., None]
+
+        return XPDNetSample(
+            masked_kspace=kspace_channeled.numpy(),
+            mask=fourier_mask.numpy(),
+            num_low_frequencies=0,
+            target=target.numpy(),
+            fname=fname,
+            slice_num=slice,
+            max_value=maximum,
+            crop_size=(384, 384)
+        )

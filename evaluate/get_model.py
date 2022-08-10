@@ -1,11 +1,17 @@
 from pathlib import Path
 import torch
+import tensorflow as tf
 
 from fastmri.models import VarNet
 from Main.pl_modules.varnet_module import VarNetModule
 from Main.pl_modules.fastmri_data_module import FastMriDataModule
 from Main.data.transforms import VarNetDataTransform
-from utils.data.load_data import create_data_loaders
+from utils.data.load_data import create_data_loaders, create_data_loaders_for_pretrained
+
+from fastmri_recon.models.subclassed_models.xpdnet import XPDNet
+from fastmri_recon.models.subclassed_models.denoisers.proposed_params import get_model_specs
+
+from run_XPDNet import getXPDNet
 
 
 def get_model(model_name: str, model_path: Path, test_path: Path, challenge: str = "multicoil"):
@@ -23,12 +29,14 @@ def get_model(model_name: str, model_path: Path, test_path: Path, challenge: str
         "VarNet_ours": "/root/models/VarNet_ours/epoch31-ssim0.9470.ckpt",
         "VarNet_pretrained": "/root/models/VarNet_pretrained/brain_leaderboard_state_dict.pt",
         "VarNet_SNU": "/root/models/VarNet_SNU/best_model.pt",
+        "XPDNet_pretrained": "/root/models/XPDNet_pretrained/model_weights.h5"
     }
 
     test_path_dict = {
         "VarNet_ours": Path("/root/leaderboard_recon/kspace"),
         "VarNet_pretrained": Path("/root/input/leaderboard"),
         "VarNet_SNU": Path("/root/input/leaderboard"),
+        "XPDNet_pretrained": Path("/root/input/leaderboard"),
     }
 
     if model_path is not None:
@@ -78,5 +86,11 @@ def get_model(model_name: str, model_path: Path, test_path: Path, challenge: str
         model.load_state_dict(pretrained['model'])
 
         data_loader = create_data_loaders(data_path=test_path, isforward=False, for_pretrained=True)
+
+    elif model_name == 'XPDNet_pretrained':
+
+        model = getXPDNet()
+
+        data_loader = create_data_loaders_for_pretrained(data_path=test_path, model_name=model_name, isforward=False)
 
     return model, data_loader
