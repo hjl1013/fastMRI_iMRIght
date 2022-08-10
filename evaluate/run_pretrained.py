@@ -4,11 +4,6 @@ from pathlib import Path
 import numpy as np
 import torch
 from tqdm import tqdm
-import os
-import sys
-
-sys.path.insert(0, os.path.dirname(Path(__file__).parent.absolute()))
-sys.path.append('/root/fastMRI_hjl')
 
 import fastmri
 from fastmri import evaluate
@@ -17,28 +12,6 @@ from Main.pl_modules.fastmri_data_module import FastMriDataModule
 
 from evaluate.get_model import get_model
 import matplotlib.pyplot as plt
-import h5py
-
-
-def get_image_path(model_name, test_path):
-    assert test_path is not None, "cannot use default test path"
-    if model_name == "VarNet_ours":
-        return test_path
-    elif model_name == "VarNet_SNU" or model_name == "VarNet_pretrained":
-        return test_path / "image"
-
-
-def save_imtoim_input(reconstructions, image_path, imtoim_input_path):
-    imtoim_input_path.mkdir(exist_ok=True, parents=True)
-    for fname, recons in reconstructions.items():
-        assert (image_path / fname).exists(), f"no file named {fname} in {image_path}"
-        with h5py.File(imtoim_input_path / fname, "w") as hf, h5py.File(image_path / fname, "r") as hf_i:
-            hf.create_dataset("image_input", data=recons)
-            for key in hf_i:
-                if key != "image_input":
-                    hf.create_dataset(key, data=hf_i[key])
-            for key in hf_i.attrs:
-                hf.attrs[key] = hf_i.attrs[key]
 
 
 def inference_step(model, batch, device, vol_info, outputs, calculate_loss, save_recon):
@@ -139,11 +112,6 @@ def run_inference(args):
         if args.save_recon:
             fastmri.save_reconstructions(outputs, args.output_path)
 
-        # save as imtoim input
-        if args.save_imtoim_input:
-            image_path = get_image_path(args.model_name, args.test_path)
-            imtoim_input_path = get_image_path(args.model_name, args.imtoim_input_path)
-            save_imtoim_input(outputs, image_path, imtoim_input_path)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(
@@ -154,7 +122,7 @@ if __name__ == "__main__":
     parser.set_defaults(
         mask_type="adaptive_equispaced_fraction",  # VarNet uses equispaced mask
         challenge="multicoil",  # only multicoil implemented for VarNet
-        test_path=None,  # path for test split, overwrites data_path
+        test_path="/root/input/train",  # path for test split, overwrites data_path
     )
     parser.add_argument(
         "--device",
@@ -186,27 +154,12 @@ if __name__ == "__main__":
         "--calculate_loss",
         default=False,
         type=bool,
-        required=True,
         help="Whether to calculate ssim loss",
     )
     parser.add_argument(
         "--save_recon",
         default=True,
         type=bool,
-        required=True,
-        help="Whether to save reconstructed images"
-    )
-    parser.add_argument(
-        "--save_imtoim_input",
-        default=False,
-        type=bool,
-        required=True,
-        help="Whether to save reconstructed images as imtoim input"
-    )
-    parser.add_argument(
-        "--imtoim_input_path",
-        default="/root/input_imtoim/train",
-        type=Path,
         help="Whether to save reconstructed images"
     )
 

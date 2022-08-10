@@ -8,7 +8,7 @@ from Main.data.transforms import VarNetDataTransform
 from utils.data.load_data import create_data_loaders
 
 
-def get_model(model_name: str, model_path: Path, test_path: Path, challenge: str):
+def get_model(model_name: str, model_path: Path, test_path: Path, challenge: str = "multicoil"):
     """
     input: model name path
     output: model and data loader
