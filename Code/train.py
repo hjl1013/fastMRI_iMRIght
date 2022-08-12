@@ -15,7 +15,7 @@ def parse():
     parser.add_argument('-g', '--GPU-NUM', type=int, default=0, help='GPU number to allocate')
     parser.add_argument('-b', '--batch-size', type=int, default=1, help='Batch size')
     parser.add_argument('-e', '--num-epochs', type=int, default=40, help='Number of epochs')
-    parser.add_argument('-l', '--lr', type=float, default=1e-3, help='Learning rate')
+    parser.add_argument('-l', '--lr', type=float, default=1e-4, help='Learning rate')
     parser.add_argument('-w', '--weight-decay', type=float, default=0, help='weight decay')
     parser.add_argument('-r', '--report-interval', type=int, default=500, help='Report interval')
     parser.add_argument('-n', '--net-name', type=Path, default='Unet_finetune', help='Name of network')

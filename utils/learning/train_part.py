@@ -360,8 +360,8 @@ def unet_train(args):
         checkpoint = torch.load(args.pretrained_file_path)
         best_val_ssim = checkpoint['best_val_ssim']
         start_epoch = checkpoint['epoch']
-        # optimizer.load_state_dict(checkpoint['optimizer'])
-        # scheduler.load_state_dict(checkpoint['scheduler'])
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        scheduler.load_state_dict(checkpoint['scheduler'])
         model.load_state_dict(checkpoint['model'])
 
     train_loader = create_data_loaders(data_path=args.data_path_train, args=args)
