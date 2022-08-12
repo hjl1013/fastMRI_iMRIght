@@ -10,7 +10,6 @@ from utils.data.transforms import UnetDataTransform
 def forward_file(model, device, image_fpath):
     with h5py.File(image_fpath, "r") as hf:
         images = np.array(hf['image_input'])
-        crop_size = np.array(hf['image_label']).shape[-2:]
 
     transform = UnetDataTransform(isforward=True, max_key='max')
 
@@ -26,7 +25,7 @@ def forward_file(model, device, image_fpath):
 
         image_input = image_input.to(device)[None, ...]
 
-        output_slice = model(image_input).cpu()[0]
+        output_slice = model(image_input).cpu()[0] * std + mean
 
         output.append(output_slice.cpu().tolist())
 

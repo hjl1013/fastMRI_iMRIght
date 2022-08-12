@@ -11,15 +11,8 @@ sys.path.append('/root/fastMRI_hjl')
 
 from get_model import get_model
 import Main.data.transforms as T
+from utils.data.transforms import VarnetDataTransform
 
-def transform(kspace, mask):
-    kspace = torch.from_numpy(kspace * mask)
-    kspace = torch.stack((kspace.real, kspace.imag), dim=-1)
-    shape = [1] + list(kspace.shape)
-    kspace = kspace.reshape(shape)
-    mask_input = torch.from_numpy(mask.reshape(1, 1, 1, kspace.shape[-2], 1).astype(np.float32)).byte()
-
-    return kspace, mask_input
 
 def forward_file(model, device, kspace_fpath, image_fpath):
     with h5py.File(kspace_fpath, "r") as hf:
@@ -28,12 +21,20 @@ def forward_file(model, device, kspace_fpath, image_fpath):
     with h5py.File(image_fpath, "r") as hf:
         crop_size = np.array(hf['image_label']).shape[-2:]
 
+    transform = VarnetDataTransform(isforward=True, max_key='max')
     output = []
     for kspace in kspaces:
-        kspace_input, mask_input = transform(kspace, mask)
+        mask_input, kspace_input, _, _, _, _ = transform(
+            mask=mask,
+            input=kspace,
+            target=None,
+            attrs=None,
+            fname=None,
+            slice=None
+        )
 
-        kspace_input = kspace_input.to(device)
-        mask_input = mask_input.to(device)
+        kspace_input = kspace_input.to(device)[None, ...]
+        mask_input = mask_input.to(device)[None, ...]
 
         output_slice = model(kspace_input, mask_input).cpu()[0]
         output_slice = T.center_crop(output_slice, crop_size)
