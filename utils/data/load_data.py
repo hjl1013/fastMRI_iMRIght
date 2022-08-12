@@ -1,19 +1,18 @@
 import h5py
 import random
-from utils.data.transforms import VarnetDataTransform, UnetDataTransform
+from utils.data.transforms import VarnetDataTransform, UnetDataTransform, VarNetDataTransform_pretrained, XPDNetDataTransform_pretrained, UnetDataTransform_pretrained
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
 import numpy as np
 
 class kspace_SliceData(Dataset):
-    def __init__(self, root, transform, input_key, target_key, forward=False, for_pretrained=False):
+    def __init__(self, root, transform, input_key, target_key, forward=False):
         self.transform = transform
         self.input_key = input_key
         self.target_key = target_key
         self.forward = forward
         self.image_examples = []
         self.kspace_examples = []
-        self.for_pretrained = for_pretrained
 
         if not forward:
             image_files = list(Path(root / "image").iterdir())
@@ -60,7 +59,7 @@ class kspace_SliceData(Dataset):
                 target = hf[self.target_key][dataslice]
                 attrs = dict(hf.attrs)
 
-        return self.transform(mask, input, target, attrs, kspace_fname.name, dataslice, self.for_pretrained)
+        return self.transform(mask, input, target, attrs, kspace_fname.name, dataslice)
 
 class image_SliceData(Dataset):
     def __init__(self, root, transform, input_key, target_key, forward=False):
@@ -97,29 +96,24 @@ class image_SliceData(Dataset):
             attrs = dict(hf.attrs)
         return self.transform(input, target, attrs, fname.name, dataslice)
 
-def create_data_loaders(data_path, args=None, isforward=False, for_pretrained=False):
-    if isforward == False and args is not None:
-        input_key = args.input_key # "image_input" or "kspace"
+
+def create_data_loaders(data_path, args, isforward=False):
+    if isforward == False:
         max_key_ = args.max_key
         target_key_ = args.target_key
-        batch_size = args.batch_size
     else:
-        input_key = args.input_key # "image_input" or "kspace"
-        max_key_ = "max"
-        target_key_ = "image_label"
-        batch_size = 1
+        max_key_ = -1
+        target_key_ = -1
 
-    net_name = str(args.net_name)
-    if net_name == 'test_varnet':
+    if args.input_type == 'kspace':
         data_storage = kspace_SliceData(
             root=data_path,
             transform=VarnetDataTransform(isforward, max_key_),
-            input_key=input_key,
+            input_key=args.input_key,
             target_key=target_key_,
             forward=isforward,
-            for_pretrained=for_pretrained
         )
-    elif net_name == 'test_unet':
+    elif args.input_type == 'image':
         data_storage = image_SliceData(
             root=data_path,
             transform=UnetDataTransform(isforward, max_key_),
@@ -130,6 +124,43 @@ def create_data_loaders(data_path, args=None, isforward=False, for_pretrained=Fa
 
     data_loader = DataLoader(
         dataset=data_storage,
+        batch_size=args.batch_size
+    )
+    return data_loader
+
+def create_data_loaders_for_pretrained(data_path, model_name, isforward=True):
+    input_key = "kspace"
+    max_key_ = "max"
+    target_key_ = "image_label"
+    batch_size = 1
+
+    if model_name == "XPDNet_pretrained":
+        transform = XPDNetDataTransform_pretrained(isforward, max_key_)
+    elif model_name == "test_unet" or model_name == "Unet_finetune":
+        transform = UnetDataTransform_pretrained(isforward, max_key_)
+    else:
+        transform = VarNetDataTransform_pretrained(isforward, max_key_)
+
+    if model_name == "test_unet" or model_name == 'Unet_finetune':
+        data_storage = image_SliceData(
+            root=data_path,
+            transform=transform,
+            input_key="reconstruction",
+            target_key=None,
+            forward=isforward,
+        )
+    else:
+        data_storage = kspace_SliceData(
+            root=data_path,
+            transform=transform,
+            input_key=input_key,
+            target_key=target_key_,
+            forward=isforward,
+        )
+
+    data_loader = DataLoader(
+        dataset=data_storage,
         batch_size=batch_size
     )
+
     return data_loader

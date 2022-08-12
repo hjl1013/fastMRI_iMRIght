@@ -18,7 +18,7 @@ from utils.data.load_data import create_data_loaders
 from utils.common.utils import save_reconstructions, ssim_loss
 from utils.common.loss_function import SSIMLoss
 from utils.model.varnet import VarNet
-from fastmri.models.unet import Unet
+from utils.model.unet import Unet
 
 def varnet_train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
     model.train()
@@ -68,15 +68,15 @@ def unet_train_epoch(args, epoch, model, data_loader, optimizer, loss_type, ssim
         maximum = maximum.cuda(non_blocking=True)
 
         output = model(image)
-        loss = loss_type(output, target)  # default l1_loss
+        output = output * std + mean
+        target = target * std + mean
+        loss = loss_type(output, target, maximum)  # default l1_loss
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
 
         # print('shape: output_{}, target_{}, std_{}, mean_{}'.format(output.shape, target.shape, std.shape, mean.shape))
-        output = output * std + mean
-        target = target * std + mean
         ssim = ssim_func(output, target, maximum)
         total_ssim += ssim.item()
 
@@ -85,7 +85,7 @@ def unet_train_epoch(args, epoch, model, data_loader, optimizer, loss_type, ssim
                 f'Epoch = [{epoch:3d}/{args.num_epochs:3d}] '
                 f'Iter = [{iter:4d}/{len(data_loader):4d}] '
                 f'Loss = {loss.item():.4g} '
-                f'SSIM = {ssim.item():.4g}'
+                f'SSIM = {ssim.item():.4g} '
                 f'Time = {time.perf_counter() - start_iter:.4f}s',
             )
             start_iter = time.perf_counter()
@@ -143,11 +143,13 @@ def unet_validate(args, model, data_loader, loss_type, ssim_func):
             std = std.cuda(non_blocking=True)
             maximum = maximum.cuda(non_blocking=True)
             output = model(image)
-            loss = loss_type(output, target)
-            total_loss += loss.item()
+            # loss = loss_type(output, target)
+            # total_loss += loss.item()
 
             output = output * std + mean
             target = target * std + mean
+            loss = loss_type(output, target, maximum)
+            total_loss += loss.item()
             ssim = ssim_func(output, target, maximum)
             total_ssim += ssim.item()
 
@@ -293,51 +295,55 @@ def unet_train(args):
 
     model = Unet(in_chans=1, out_chans=1, chans=256, num_pool_layers=3, drop_prob=0.0)
     model.to(device=device)
-    '''
-    FOLDER = "/root/models/Unet_pretrained/"
-    url_root = "https://dl.fbaipublicfiles.com/fastMRI/trained_models/unet/"
-    # using pretrained parameter
-    MODEL_FNAMES = "brain_leaderboard_state_dict.pt"
-    # using finetuned parameter
-    # MODEL_FNAMES = "best_model_1.pt"
 
-    if not Path(FOLDER + MODEL_FNAMES).exists():
-        print('no such pretrained model')
-        download_model(url_root + MODEL_FNAMES, MODEL_FNAMES)
-        os.replace('./'+MODEL_FNAMES, FOLDER+MODEL_FNAMES)
+    # FOLDER = "/root/models/Unet_pretrained/"
+    # url_root = "https://dl.fbaipublicfiles.com/fastMRI/trained_models/unet/"
+    # # using pretrained parameter
+    # MODEL_FNAMES = "brain_leaderboard_state_dict.pt"
+    # # using finetuned parameter
+    # # MODEL_FNAMES = "best_model_1.pt"
+    #
+    # if not Path(FOLDER + MODEL_FNAMES).exists():
+    #     print('no such pretrained model')
+    #     download_model(url_root + MODEL_FNAMES, MODEL_FNAMES)
+    #     os.replace('./'+MODEL_FNAMES, FOLDER+MODEL_FNAMES)
+    #
+    # pretrained = torch.load(FOLDER + MODEL_FNAMES)
+    # if 'leaderboard' in MODEL_FNAMES:
+    #     pretrained_copy = copy.deepcopy(pretrained)
+    #     for layer in pretrained_copy.keys():
+    #         split = layer.split('.')
+    #         if split[0] == 'down_sample_layers' and split[1] == 3:
+    #             del pretrained[layer]
+    #         if split[1]!='0' and (split[0] == 'up_conv' or split[0] == 'up_transpose_conv'):
+    #             split[1] = str(int(split[1]) - 1)
+    #             pretrained['.'.join(split)] = pretrained_copy[layer]
+    #         elif split[0] == 'conv':
+    #             del pretrained[layer]
+    #
+    #     pretrained_copy = copy.deepcopy(pretrained)
+    #     for layer in pretrained_copy.keys():
+    #         if not layer in model.state_dict().keys():
+    #             del pretrained[layer]
+    #
+    #     # print(pretrained.keys())
+    #     #
+    #     # for layer in model.state_dict():
+    #     #     print(layer)
+    #     #     print(model.state_dict()[layer].dtype)
+    #     #     print()
+    #     #
+    #     # re = model.load_state_dict(pretrained, strict=False)
+    #     #
+    #     # print(re)
+    # else:
+    #     model.load_state_dict(pretrained['model'])
 
-    pretrained = torch.load(FOLDER + MODEL_FNAMES)
-    if 'leaderboard' in MODEL_FNAMES:
-        pretrained_copy = copy.deepcopy(pretrained)
-        print(pretrained_copy.keys())
-        # summary(pretrained, (1, 384, 384))
-        for layer in pretrained_copy.keys():
-            print(layer)
-            split = layer.split('.')
-            print(split[0])
-            print(split[1]=='0')
-            if split[0] == 'down_sample_layers' and split[1] == 3:
-                del pretrained[layer]
-            if split[1]!='0' and (split[0] == 'up_conv' or split[0] == 'up_transpose_conv'):
-                split[1] = str(int(split[1]) - 1)
-                pretrained['.'.join(split)] = pretrained[layer]
-                del pretrained[layer]
-            if split[1]=='0' and (split[0] == 'up_conv' or split[0] == 'up_transpose_conv'):
-                print(0)
-                del pretrained[layer]
-            elif split[0] == 'conv':
-                del pretrained[layer]
-        #    if layer.split('.', 2)[1].isdigit() and (args.cascade <= int(layer.split('.', 2)[1]) <= 11):
-        #        del pretrained[layer]
-        model.load_state_dict(pretrained)
-    else:
-        model.load_state_dict(pretrained['model'])
-    '''
     # summary(model, (1, 1, 384, 384))
     # x = Variable(torch.randn(1, 1, 384, 384, device=device))
     # make_dot(model(x), params=dict(model.named_parameters()))#.render("graph", format="png")
 
-    loss_type = F.l1_loss
+    loss_type = SSIMLoss().to(device=device)
     ssim_func = SSIMLoss().to(device=device)
 
     optimizer = torch.optim.RAdam(
@@ -347,8 +353,16 @@ def unet_train(args):
         optimizer, args.num_epochs, eta_min=1e-6
     )
 
-    best_val_loss = 1.
-    start_epoch = 0
+    if args.pretrained_file_path is None:
+        best_val_ssim = 1.
+        start_epoch = 0
+    else:
+        checkpoint = torch.load(args.pretrained_file_path)
+        best_val_ssim = checkpoint['best_val_ssim']
+        start_epoch = checkpoint['epoch']
+        # optimizer.load_state_dict(checkpoint['optimizer'])
+        # scheduler.load_state_dict(checkpoint['scheduler'])
+        model.load_state_dict(checkpoint['model'])
 
     train_loader = create_data_loaders(data_path=args.data_path_train, args=args)
     val_loader = create_data_loaders(data_path=args.data_path_val, args=args)

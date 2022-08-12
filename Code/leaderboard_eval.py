@@ -48,10 +48,10 @@ def forward(args):
     device = torch.device(f'cuda:{args.GPU_NUM}' if torch.cuda.is_available() else 'cpu')
     torch.cuda.set_device(device)
     
-    # leaderboard_data = glob.glob(os.path.join(args.leaderboard_data_path,'*.h5'))
+    leaderboard_data = glob.glob(os.path.join(args.leaderboard_data_path,'*.h5'))
     # if len(leaderboard_data) != 58:
     #     raise  NotImplementedError('Leaderboard Data Size Should Be 58')
-    
+    #
     # your_data = glob.glob(os.path.join(args.your_data_path,'*.h5'))
     # if len(your_data) != 58:
     #     raise  NotImplementedError('Your Data Size Should Be 58')
@@ -106,7 +106,7 @@ if __name__ == '__main__':
     """
     Modify Path Below To Test Your Results
     """
-    parser.add_argument('-yp', '--your_data_path', type=str, default='/root/result/ensemble_VarNet_pretrained_VarNet_SNU/reconstructions/')
+    parser.add_argument('-yp', '--your_data_path', type=str, default='/root/result/Unet_finetune/reconstructions/')
     parser.add_argument('-key', '--output_key', type=str, default='reconstruction')
     
     args = parser.parse_args()
