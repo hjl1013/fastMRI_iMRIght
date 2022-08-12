@@ -14,7 +14,9 @@ import torch.nn as nn
 import torch.nn.functional as F
 from fastmri.data import transforms
 
-from unet import Unet
+import sys
+sys.path.append('/root/ksunw/')
+from utils.model.unet import Unet
 
 
 class NormUnet(nn.Module):
@@ -243,6 +245,7 @@ class VarNet(nn.Module):
         result = fastmri.rss(fastmri.complex_abs(fastmri.ifft2c(kspace_pred)), dim=1)
         height = result.shape[-2]
         width = result.shape[-1]
+        # return cropped image
         return result[..., (height - 384) // 2 : 384 + (height - 384) // 2, (width - 384) // 2 : 384 + (width - 384) // 2]
 
 

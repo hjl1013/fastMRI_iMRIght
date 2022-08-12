@@ -3,7 +3,11 @@
 */ .DS_Store
 
 # for pycharm server connection
-.idea
+.idea/
+
+# python virtual enviorment
+venv/
 
 # check file
 check_hjl.py
+check_ksunw.py
