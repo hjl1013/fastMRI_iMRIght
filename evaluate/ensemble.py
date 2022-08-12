@@ -85,8 +85,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     args.models = [
-        ("VarNet_pretrained", Path("/root/result/VarNet_pretrained/reconstructions"), 1.1),
-        ("VarNet_SNU", Path("/root/result/VarNet_SNU/best_model_ep11_0.028276184172645012.pt/reconstructions"), -0.1)
+        ("VarNet_pretrained", Path("/root/result/VarNet_pretrained/reconstructions"), 0.4),
+        ("XPDNet_pretrained", Path("/root/result/XPDNet_pretrained/reconstructions"), 0.6)
     ]
 
     output_path = "/root/result/ensemble"

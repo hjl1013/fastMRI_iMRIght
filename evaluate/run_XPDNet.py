@@ -89,7 +89,7 @@ def forward_file(model, kspace_fpath, image_fpath):
             mask_input,
             smaps_input,
             [[crop_size[0], crop_size[1]]]
-        ])[0, :, :, 0]
+        ])[0, :, :, 0] / 1e6
 
         output.append(output_slice.numpy().tolist())
 

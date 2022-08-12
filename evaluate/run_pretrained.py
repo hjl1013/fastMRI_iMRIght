@@ -26,6 +26,9 @@ def inference_step(model_name, model, batch, device, vol_info, outputs, calculat
         ])
         target = batch.target
         masked_kspace = batch.masked_kspace
+    elif model_name == 'test_unet' or model_name == 'Unet_finetune':
+        output = model(batch.input_image.to(device)).cpu()
+        output = output * batch.std + batch.mean
     else:
         crop_size = batch.target.shape[-2:]
         output = model(batch.masked_kspace.to(device), batch.mask.to(device)).cpu()
@@ -136,7 +139,7 @@ if __name__ == "__main__":
     parser.set_defaults(
         mask_type="adaptive_equispaced_fraction",  # VarNet uses equispaced mask
         challenge="multicoil",  # only multicoil implemented for VarNet
-        test_path="/root/input/train",  # path for test split, overwrites data_path
+        test_path=None,  # path for test split, overwrites data_path
     )
     parser.add_argument(
         "--device",
@@ -146,14 +149,14 @@ if __name__ == "__main__":
     )
     parser.add_argument(
         "--model_name",
-        default='XPDNet_pretrained',
+        default='Unet_finetune',
         type=str,
-        choices=['VarNet_pretrained', 'VarNet_ours', 'VarNet_SNU', 'XPDNet_pretrained'],
+        choices=['VarNet_pretrained', 'VarNet_ours', 'VarNet_SNU', 'XPDNet_pretrained', 'test_unet', 'Unet_finetune'],
         help="Name of model"
     )
     parser.add_argument(
         "--model_file_name",
-        default="model_weights.h5",
+        default=None,
         type=str,
         help="Path to saved state_dict (will download if not provided)",
     )
@@ -178,7 +181,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    args.output_path = '/root/result' / Path(args.model_name) / args.model_file_name / 'reconstructions'
+    args.output_path = '/root/result' / Path(args.model_name) / 'reconstructions'
     if args.model_file_name is not None:
         args.state_dict_file = '/root/models' / Path(args.model_name) / args.model_file_name
     else:
