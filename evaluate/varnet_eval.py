@@ -43,18 +43,22 @@ def forward_file(model, device, kspace_fpath, image_fpath):
     return output
 
 
-def save_file_imtoim(output, image_input_dir, imtoim_input_dir, fname):
+def save_file_imtoim(output, image_input_dir, output_dir, fname):
     assert (image_input_dir / fname).exists(), f"no file named {fname} in {image_input_dir}"
-    with h5py.File(imtoim_input_dir / fname, "w") as hf, h5py.File(image_input_dir / fname, "r") as hf_i:
-        hf.create_dataset("image_input", data=output)
+    with h5py.File(output_dir / fname, "w") as hf, h5py.File(image_input_dir / fname, "r") as hf_i:
+        hf.create_dataset("VarNet_input", data=output)
         for key in hf_i:
-            if key != "image_input":
-                hf.create_dataset(key, data=hf_i[key])
+            hf.create_dataset(key, data=hf_i[key])
         for key in hf_i.attrs:
             hf.attrs[key] = hf_i.attrs[key]
 
 
-def save_imtoim_input(args):
+def save_file_recon(output, output_dir, fname):
+    with h5py.File(output_dir / fname, "w") as hf:
+        hf.create_dataset("reconstruction", data=output)
+
+
+def varnet_eval(args):
     device = torch.device(args.device)
 
     model, _ = get_model(
@@ -69,8 +73,8 @@ def save_imtoim_input(args):
     with torch.no_grad():
         image_input_dir = args.data_dir / 'image'
         kspace_input_dir = args.data_dir / 'kspace'
-        imtoim_input_dir = args.output_dir / 'image'
-        imtoim_input_dir.mkdir(exist_ok=True, parents=True)
+        output_dir = args.output_dir
+        output_dir.mkdir(exist_ok=True, parents=True)
 
         i = 1
         tot = len(list(kspace_input_dir.iterdir()))
@@ -83,7 +87,12 @@ def save_imtoim_input(args):
             print(f"[{i} / {tot}] Saving file {fname}")
 
             output = forward_file(model, device, kspace_data_path, image_data_path)
-            save_file_imtoim(output, image_input_dir, imtoim_input_dir, fname)
+            if args.save_mode == 'imtoim_input':
+                save_file_imtoim(output, image_input_dir, output_dir, fname)
+            elif args.save_mode == 'reconstruction':
+                save_file_recon(output, output_dir, fname)
+            else:
+                raise NotImplementedError(f"{args.save_mode} mode not implemented")
 
             print(f"Successfully saved {fname}")
             print()
@@ -119,7 +128,14 @@ if __name__ == '__main__':
         type=Path,
         help="Directory of data"
     )
+    parser.add_argument(
+        "--save_mode",
+        default="reconstruction",
+        type=str,
+        choices=["imtoim_input", "reconstruction"],
+        help="Mode of saving outputs"
+    )
 
     args = parser.parse_args()
 
-    save_imtoim_input(args)
+    varnet_eval(args)

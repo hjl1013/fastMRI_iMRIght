@@ -22,7 +22,7 @@ python run_pretrained.py --model_name "VarNet_pretrained" --model_file_name "bra
 ```
 
 ## Train
-To run unet train file 'Code/train.py':
+To run unet train file `train.py`:
 ```bash
 python train.py --net-name 'Unet_finetune' --input-type 'image' --data-path-train '/root/input_imtoim/train/image' --data-path-val '/root/input_imtoim/val/image' --input-key 'image_input' --pretrained-file-path '/root/result/Unet_finetune/checkpoints/model.pt'
 ```
