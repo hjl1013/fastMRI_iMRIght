@@ -14,7 +14,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from fastmri.data import transforms
 
-from unet import Unet
+from .unet import Unet
 
 
 class NormUnet(nn.Module):

@@ -7,7 +7,7 @@ import argparse
 import fastmri
 
 
-def ensemble_step(models: Dict[str, Path], fname: str, ensemble_type: str = "average"):
+def ensemble_step(models: List[Tuple[str, Path, int]], fname: str, ensemble_type: str = "wavg"):
     """
     one step of ensembling images
 
@@ -19,18 +19,23 @@ def ensemble_step(models: Dict[str, Path], fname: str, ensemble_type: str = "ave
 
     output = None
 
-    if ensemble_type == "average":
-        for model_name, folder in models.items():
+    if ensemble_type == "wavg":
+        weight_sum = 0
+        for model_name, folder, weight in models:
             if (folder / fname).exists():
                 with h5py.File(str(folder / fname), "r") as hf:
                     if output is None:
-                        output = np.array(hf['reconstruction'])
+                        output = np.array(hf['reconstruction']) * weight
                     else:
-                        output += np.array(hf['reconstruction'])
+                        output += np.array(hf['reconstruction']) * weight
+
+                    weight_sum += weight
             else:
                 print(f"failed to ensemble {fname}, {folder} has no file named {fname}")
                 output = None
                 break
+
+        assert weight_sum == 1, "sum of weights doesn't sum up to 1"
 
     return output
 
@@ -41,7 +46,7 @@ def ensemble(args):
 
     # print introduction
     print("list of models to ensemble:")
-    for model, _ in args.models.items():
+    for model, _, _ in args.models:
         print(model)
     print()
 
@@ -57,7 +62,6 @@ def ensemble(args):
 
         if output is not None:
             print(f"successfully ensembled {fname}")
-            output = output / len(args.models)
             outputs[fname] = output.tolist()
 
         print()
@@ -72,20 +76,21 @@ if __name__ == "__main__":
 
     parser.add_argument(
         "--ensemble_type",
-        default="average",
+        default="wavg",
         type=str,
-        choices=["average"],
+        choices=["wavg"],
         help="ensemble strategy to use"
     )
 
     args = parser.parse_args()
 
-    args.models={
-        "VarNet_pretrained": Path("/root/result/VarNet_pretrained/reconstructions"),
-        "VarNet_SNU": Path("/root/result/VarNet_SNU/reconstructions"),
-    }
+    args.models = [
+        ("VarNet_pretrained", Path("/root/result/VarNet_pretrained/reconstructions"), 0.4),
+        ("XPDNet_pretrained", Path("/root/result/XPDNet_pretrained/reconstructions"), 0.6)
+    ]
+
     output_path = "/root/result/ensemble"
-    for models, _ in args.models.items():
+    for models, _, _ in args.models:
         output_path += "_" + models
     args.output_path = Path(output_path) / "reconstructions"
 
