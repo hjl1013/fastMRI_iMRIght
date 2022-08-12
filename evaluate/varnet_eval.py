@@ -61,10 +61,9 @@ def save_file_recon(output, output_dir, fname):
 def varnet_eval(args):
     device = torch.device(args.device)
 
-    model, _ = get_model(
+    model = get_model(
         model_name=args.model_name,
         model_path=None,  # using default
-        test_path=None,  # we don't actually need this
     )
 
     model = model.to(device)

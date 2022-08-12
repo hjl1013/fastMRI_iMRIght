@@ -1,6 +1,6 @@
 import h5py
 import random
-from utils.data.transforms import VarnetDataTransform, UnetDataTransform, VarNetDataTransform_pretrained, XPDNetDataTransform_pretrained, UnetDataTransform_pretrained
+from utils.data.transforms import VarnetDataTransform, UnetDataTransform
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
 import numpy as np
@@ -126,41 +126,4 @@ def create_data_loaders(data_path, args, isforward=False):
         dataset=data_storage,
         batch_size=args.batch_size
     )
-    return data_loader
-
-def create_data_loaders_for_pretrained(data_path, model_name, isforward=True):
-    input_key = "kspace"
-    max_key_ = "max"
-    target_key_ = "image_label"
-    batch_size = 1
-
-    if model_name == "XPDNet_pretrained":
-        transform = XPDNetDataTransform_pretrained(isforward, max_key_)
-    elif model_name == "test_unet" or model_name == "Unet_finetune":
-        transform = UnetDataTransform_pretrained(isforward, max_key_)
-    else:
-        transform = VarNetDataTransform_pretrained(isforward, max_key_)
-
-    if model_name == "test_unet" or model_name == 'Unet_finetune':
-        data_storage = image_SliceData(
-            root=data_path,
-            transform=transform,
-            input_key="reconstruction",
-            target_key=None,
-            forward=isforward,
-        )
-    else:
-        data_storage = kspace_SliceData(
-            root=data_path,
-            transform=transform,
-            input_key=input_key,
-            target_key=target_key_,
-            forward=isforward,
-        )
-
-    data_loader = DataLoader(
-        dataset=data_storage,
-        batch_size=batch_size
-    )
-
     return data_loader
