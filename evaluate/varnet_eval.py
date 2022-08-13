@@ -47,7 +47,7 @@ def forward_file(model, device, kspace_fpath, image_fpath):
 def save_file_imtoim(output, image_input_dir, output_dir, fname):
     assert (image_input_dir / fname).exists(), f"no file named {fname} in {image_input_dir}"
     with h5py.File(output_dir / fname, "w") as hf, h5py.File(image_input_dir / fname, "r") as hf_i:
-        hf.create_dataset("VarNet_input", data=output)
+        hf.create_dataset("VarNet_recon", data=output)
         for key in hf_i:
             hf.create_dataset(key, data=hf_i[key])
         for key in hf_i.attrs:

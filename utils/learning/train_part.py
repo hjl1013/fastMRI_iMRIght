@@ -1,24 +1,20 @@
 import shutil
 import numpy as np
 import torch
-import torch.nn as nn
-from torch.nn import functional as F
-from torchsummary import summary
-from torchviz import make_dot
-from torch.autograd import Variable
 import time
 import requests
 from tqdm import tqdm
 from pathlib import Path
-import os
 import copy
 
 from collections import defaultdict
-from utils.data.load_data import create_data_loaders
+from utils.data.load_data import create_data_loaders, create_data_loaders_for_resunet
 from utils.common.utils import save_reconstructions, ssim_loss
 from utils.common.loss_function import SSIMLoss
 from utils.model.varnet import VarNet
 from utils.model.unet import Unet
+from core.res_unet import ResUnet, ResUnetPlus
+from core.res_unet_plus import ResUnetPlusPlus
 
 def varnet_train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
     model.train()
@@ -68,6 +64,8 @@ def unet_train_epoch(args, epoch, model, data_loader, optimizer, loss_type, ssim
         maximum = maximum.cuda(non_blocking=True)
 
         output = model(image)
+        std = std[:, None, None, None]
+        mean = mean[:, None, None, None]
         output = output * std + mean
         target = target * std + mean
         loss = loss_type(output, target, maximum)  # default l1_loss
@@ -80,7 +78,7 @@ def unet_train_epoch(args, epoch, model, data_loader, optimizer, loss_type, ssim
         ssim = ssim_func(output, target, maximum)
         total_ssim += ssim.item()
 
-        if iter % args.report_interval == 0:
+        if iter % (args.report_interval // args.batch_size) == 0:
             print(
                 f'Epoch = [{epoch:3d}/{args.num_epochs:3d}] '
                 f'Iter = [{iter:4d}/{len(data_loader):4d}] '
@@ -130,7 +128,6 @@ def unet_validate(args, model, data_loader, loss_type, ssim_func):
     targets = defaultdict(dict)
     start = time.perf_counter()
 
-    len_loader = len(data_loader)
     total_loss = 0.
     total_ssim = 0.
 
@@ -146,6 +143,8 @@ def unet_validate(args, model, data_loader, loss_type, ssim_func):
             # loss = loss_type(output, target)
             # total_loss += loss.item()
 
+            std = std[:, None, None, None]
+            mean = mean[:, None, None, None]
             output = output * std + mean
             target = target * std + mean
             loss = loss_type(output, target, maximum)
@@ -154,11 +153,9 @@ def unet_validate(args, model, data_loader, loss_type, ssim_func):
             total_ssim += ssim.item()
 
             for i in range(output.shape[0]):
-                reconstructions[fnames[i]][int(slices[i])] = output[i].cpu().numpy()
-                targets[fnames[i]][int(slices[i])] = target[i].cpu().numpy()
+                reconstructions[fnames[i]][int(slices[i])] = output[i][0].cpu().numpy()
+                targets[fnames[i]][int(slices[i])] = target[i][0].cpu().numpy()
 
-    val_loss = total_loss / len_loader
-    val_ssim = total_ssim / len_loader
     for fname in reconstructions:
         reconstructions[fname] = np.stack(
             [out for _, out in sorted(reconstructions[fname].items())]
@@ -168,7 +165,7 @@ def unet_validate(args, model, data_loader, loss_type, ssim_func):
             [out for _, out in sorted(targets[fname].items())]
         )
     num_subjects = len(reconstructions)
-    return val_loss, val_ssim, num_subjects, reconstructions, targets, None, time.perf_counter() - start
+    return total_loss, total_ssim, num_subjects, reconstructions, targets, None, time.perf_counter() - start
 
 
 def save_model(args, exp_dir, epoch, model, optimizer, scheduler, train_ssim, best_val_ssim, is_new_best):
@@ -391,6 +388,145 @@ def unet_train(args):
         print(
             f'Epoch = [{epoch:4d}/{args.num_epochs:4d}] TrainLoss = {train_loss:.4g} TrainSSIM = {train_ssim:.4g}'
             f'ValLoss = {val_loss:.4g} ValSSIM = {val_ssim:.4g} TrainTime = {train_time:.4f}s ValTime = {val_time:.4f}s',
+        )
+
+        if is_new_best:
+            print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@NewRecord@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
+            start = time.perf_counter()
+            save_reconstructions(reconstructions, args.val_dir, targets=targets, inputs=inputs)
+            print(
+                f'ForwardTime = {time.perf_counter() - start:.4f}s',
+            )
+
+
+################## ResUnet ########################
+def resunet_validate(args, model, data_loader, loss_type):
+    model.eval()
+    reconstructions = defaultdict(dict)
+    targets = defaultdict(dict)
+    start = time.perf_counter()
+
+    with torch.no_grad():
+        for iter, data in enumerate(data_loader):
+            input, target, _, mean, std, fnames, slices = data
+            input = input.cuda(non_blocking=True)
+            target = target.cuda(non_blocking=True)
+            mean = mean.cuda(non_blocking=True)
+            std = std.cuda(non_blocking=True)
+            output = model(input)
+
+            std = std[:, None, None, None]
+            mean = mean[:, None, None, None]
+            output = output * std + mean
+            target = target * std + mean
+
+            for i in range(output.shape[0]):
+                reconstructions[fnames[i]][int(slices[i])] = output[i][0].cpu().numpy()
+                targets[fnames[i]][int(slices[i])] = target[i][0].cpu().numpy()
+
+    for fname in reconstructions:
+        reconstructions[fname] = np.stack(
+            [out for _, out in sorted(reconstructions[fname].items())]
+        )
+    for fname in targets:
+        targets[fname] = np.stack(
+            [out for _, out in sorted(targets[fname].items())]
+        )
+    val_loss = sum([ssim_loss(targets[fname], reconstructions[fname]) for fname in reconstructions])
+    num_subjects = len(reconstructions)
+    return val_loss, num_subjects, reconstructions, targets, None, time.perf_counter() - start
+
+
+def resunet_train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
+    model.train()
+    start_epoch = start_iter = time.perf_counter()
+    len_loader = len(data_loader)
+    total_loss = 0.
+
+    for iter, data in tqdm(enumerate(data_loader)):
+        image, target, maximum, mean, std, _, _ = data
+        image = image.cuda(non_blocking=True)
+        target = target.cuda(non_blocking=True)
+        maximum = maximum.cuda(non_blocking=True)
+        mean = mean.cuda(non_blocking=True)
+        std = std.cuda(non_blocking=True)
+
+        output = model(image)
+        std = std[:, None, None, None]
+        mean = mean[:, None, None, None]
+        output = output * std + mean
+        target = target * std + mean
+        loss = loss_type(output, target, maximum)  # default SSIM loss
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        total_loss += loss.item()
+
+        # print('shape: output_{}, target_{}, std_{}, mean_{}'.format(output.shape, target.shape, std.shape, mean.shape))
+
+        if iter % (args.report_interval // args.batch_size) == 0:
+            print(
+                f'Epoch = [{epoch:3d}/{args.num_epochs:3d}] '
+                f'Iter = [{iter:4d}/{len(data_loader):4d}] '
+                f'Loss = {loss.item():.4g} '
+                f'Time = {time.perf_counter() - start_iter:.4f}s',
+            )
+            start_iter = time.perf_counter()
+    total_loss = total_loss / len_loader
+    return total_loss, time.perf_counter() - start_epoch
+
+
+def resunet_train(args):
+    device = torch.device(f'cuda:{args.GPU_NUM}' if torch.cuda.is_available() else 'cpu')
+    torch.cuda.set_device(device)
+    print('Current cuda device: ', torch.cuda.current_device())
+
+    model = ResUnetPlusPlus(channel=4) # stack 4 input images 'image_input' 'image_grappa' 'XPDNet_recon' 'VarNet_recon'
+    model.to(device=device)
+
+    loss_type = SSIMLoss().to(device=device)
+    optimizer = torch.optim.RAdam(
+        model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+    )
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, args.num_epochs, eta_min=1e-6
+    )
+
+    best_val_ssim = 1.
+    start_epoch = 0
+
+    if args.pretrained_file_path is not None:
+        checkpoint = torch.load(args.pretrained_file_path)
+        # best_val_ssim = checkpoint['best_val_ssim']
+        start_epoch = checkpoint['epoch']
+        optimizer.load_state_dict(checkpoint['optimizer'])
+        scheduler.load_state_dict(checkpoint['scheduler'])
+        model.load_state_dict(checkpoint['model'])
+
+    train_loader = create_data_loaders_for_resunet(data_path=args.data_path_train, args=args)
+    val_loader = create_data_loaders_for_resunet(data_path=args.data_path_val, args=args)
+
+    for epoch in range(start_epoch, args.num_epochs):
+        print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
+
+        train_loss, train_time = resunet_train_epoch(args, epoch, model, train_loader, optimizer, loss_type)
+        scheduler.step()
+        val_loss, num_subjects, reconstructions, targets, inputs, val_time = \
+            resunet_validate(args, model, val_loader, loss_type)
+
+        train_loss = torch.tensor(train_loss).cuda(non_blocking=True)
+        val_loss = torch.tensor(val_loss).cuda(non_blocking=True)
+        num_subjects = torch.tensor(num_subjects).cuda(non_blocking=True)
+
+        val_loss = val_loss / num_subjects
+
+        is_new_best = val_loss < best_val_ssim
+        best_val_ssim = min(best_val_ssim, val_loss)
+
+        save_model(args, args.exp_dir, epoch + 1, model, optimizer, scheduler, train_loss, best_val_ssim, is_new_best)
+        print(
+            f'Epoch = [{epoch:4d}/{args.num_epochs:4d}] TrainLoss = {train_loss:.4g} '
+            f'ValLoss = {val_loss:.4g} TrainTime = {train_time:.4f}s ValTime = {val_time:.4f}s',
         )
 
         if is_new_best:
