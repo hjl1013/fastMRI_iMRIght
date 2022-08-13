@@ -29,8 +29,8 @@ class SSIMLoss(nn.Module):
         self.cov_norm = NP / (NP - 1)
 
     def forward(self, X, Y, data_range):
-        X = X.unsqueeze(1)
-        Y = Y.unsqueeze(1)
+        assert isinstance(self.w, torch.Tensor)
+
         data_range = data_range[:, None, None, None]
         C1 = (self.k1 * data_range) ** 2
         C2 = (self.k2 * data_range) ** 2
