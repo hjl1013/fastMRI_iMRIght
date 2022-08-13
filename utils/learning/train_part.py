@@ -481,7 +481,7 @@ def resunet_train(args):
     torch.cuda.set_device(device)
     print('Current cuda device: ', torch.cuda.current_device())
 
-    model = ResUnetPlusPlus(channel=4) # stack 4 input images 'image_input' 'image_grappa' 'XPDNet_recon' 'VarNet_recon'
+    model = ResUnetPlusPlus(channel=2) # stack 4 input images 'image_input' 'image_grappa' 'XPDNet_recon' 'VarNet_recon'
     model.to(device=device)
 
     loss_type = SSIMLoss().to(device=device)

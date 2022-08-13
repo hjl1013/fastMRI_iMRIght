@@ -65,6 +65,7 @@ class ResUnetDataTransform:
     def __call__(self, input, target, attrs, fname, slice):
 
         input = to_tensor(input).type(torch.FloatTensor)
+        input = input[2:]
         # normalize input
         input, mean, std = normalize_instance(input, eps=1e-11)
         input = input.clamp(-6, 6)
