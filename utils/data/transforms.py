@@ -40,6 +40,7 @@ class UnetDataTransform:
         self.max_key = max_key
     def __call__(self, input, target, attrs, fname, slice):
         input = to_tensor(input).type(torch.FloatTensor)
+        input = input[None, ...]
         # normalize input
         input, mean, std = normalize_instance(input, eps=1e-11)
         input = input.clamp(-6, 6)
@@ -48,6 +49,7 @@ class UnetDataTransform:
             maximum = attrs[self.max_key]
 
             # target = center_crop(target, crop_size)
+            target = target[None, ...]
             target = normalize(target, mean, std, eps=1e-11)
             target = target.clamp(-6, 6)
         else:
@@ -55,3 +57,28 @@ class UnetDataTransform:
             maximum = -1
 
         return input, target, mean, std, fname, slice, maximum
+
+class ResUnetDataTransform:
+    def __init__(self, isforward, max_key):
+        self.isforward = isforward
+        self.max_key = max_key
+    def __call__(self, input, target, attrs, fname, slice):
+
+        input = to_tensor(input).type(torch.FloatTensor)
+        input = input[2:]
+        # normalize input
+        input, mean, std = normalize_instance(input, eps=1e-11)
+        input = input.clamp(-6, 6)
+
+        if not self.isforward:
+            target = to_tensor(target)
+            target = target[None, ...]
+            target = normalize(target, mean, std, eps=1e-11)
+            target = target.clamp(-6, 6)
+
+            maximum = attrs[self.max_key]
+        else:
+            target = -1
+            maximum = -1
+
+        return input, target, maximum, mean, std, fname, slice
