@@ -5,7 +5,7 @@ if os.getcwd() + '/utils/model/' not in sys.path:
     sys.path.insert(1, os.getcwd() + '/utils/model/')
 sys.path.append('/root/fastMRI_hjl')
 
-from utils.learning.train_part import resunet_train
+from utils.learning.train_part import mlpmixer_train
 from pathlib import Path
 
 
@@ -29,7 +29,7 @@ def parse():
     parser.add_argument('-l', '--lr', type=float, default=0.1, help='Learning rate')
     parser.add_argument('-w', '--weight-decay', type=float, default=0, help='weight decay')
     parser.add_argument('-r', '--report-interval', type=int, default=500, help='Report interval')
-    parser.add_argument('-n', '--net-name', type=Path, default='ResUnet_with_stacking_ReduceLROnPlateau', help='Name of network')
+    parser.add_argument('-n', '--net-name', type=Path, default='MLPMixer', help='Name of network')
     parser.add_argument('-i', '--input-type', type=str, default='image', help='Type of input', choices=['image', 'kspace'])
     parser.add_argument('-t', '--data-path-train', type=Path, default='/root/input_imtoim_XPDNet_VarNet/train/image',
                         help='Directory of train data')
@@ -57,4 +57,4 @@ if __name__ == '__main__':
     args.exp_dir.mkdir(parents=True, exist_ok=True)
     args.val_dir.mkdir(parents=True, exist_ok=True)
 
-    resunet_train(args)
+    mlpmixer_train(args)
