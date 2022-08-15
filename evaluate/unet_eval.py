@@ -5,9 +5,9 @@ import numpy as np
 from pathlib import Path
 
 from get_model import get_model
-from utils.data.transforms import UnetDataTransform
+from utils.data.transforms import UnetDataTransform, ResUnetDataTransform
 
-def forward_file(model, device, image_fpath):
+def forward_file_unet(model, device, image_fpath):
     with h5py.File(image_fpath, "r") as hf:
         images = np.array(hf['image_input'])
 
@@ -25,7 +25,37 @@ def forward_file(model, device, image_fpath):
 
         image_input = image_input.to(device)[None, ...]
 
-        output_slice = model(image_input).cpu()[0] * std + mean
+        output_slice = model(image_input).cpu()[0][0] * std + mean
+
+        output.append(output_slice.cpu().tolist())
+
+    return output
+
+
+def forward_file_resunet(model, device, image_fpath):
+    with h5py.File(image_fpath, "r") as hf:
+        images = np.stack([
+            hf['image_input'],
+            hf['image_grappa'],
+            hf['VarNet_recon'],
+            hf['XPDNet_recon']
+        ], axis=1)
+
+    transform = ResUnetDataTransform(isforward=True, max_key='max')
+
+    output = []
+    for image in images:
+        image_input, _, _, mean, std, _, _ = transform(
+            input=image,
+            target=None,
+            attrs=None,
+            fname=None,
+            slice=None,
+        )
+
+        image_input = image_input.to(device)[None, ...]
+
+        output_slice = model(image_input).cpu()[0][0] * std + mean
 
         output.append(output_slice.cpu().tolist())
 
@@ -47,6 +77,11 @@ def unet_eval(args):
 
     model = model.to(device)
     model.eval()
+
+    if args.model_type == 'Unet':
+        forward_file = forward_file_unet
+    elif args.model_type == 'ResUnet':
+        forward_file = forward_file_resunet
 
     with torch.no_grad():
         image_input_dir = args.data_dir / 'image'
@@ -80,8 +115,15 @@ if __name__ == '__main__':
         "--model_name",
         default="Unet_finetune",
         type=str,
-        choices=['Unet_finetune'],
+        choices=['Unet_finetune', 'ResUnet_with_stacking'],
         help="Name of model"
+    )
+    parser.add_argument(
+        "--model_type",
+        default="Unet",
+        type=str,
+        choices=['Unet', 'ResUnet'],
+        help="Type of model"
     )
     parser.add_argument(
         "--device",

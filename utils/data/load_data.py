@@ -99,11 +99,10 @@ class image_SliceData(Dataset):
 
 
 class ResUnetSliceData(Dataset):
-    def __init__(self, root, transform, input_key, target_key, forward=False):
+    def __init__(self, root, transform, input_key, target_key):
         self.transform = transform
         self.input_key = input_key
         self.target_key = target_key
-        self.forward = forward
         self.examples = []
 
         files = list(Path(root).iterdir())
@@ -131,10 +130,7 @@ class ResUnetSliceData(Dataset):
                 hf['VarNet_recon'][dataslice],
                 hf['XPDNet_recon'][dataslice]
             ])
-            if self.forward:
-                target = -1
-            else:
-                target = hf[self.target_key][dataslice]
+            target = hf[self.target_key][dataslice]
             attrs = dict(hf.attrs)
         return self.transform(input, target, attrs, fname.name, dataslice)
 
@@ -171,20 +167,33 @@ def create_data_loaders(data_path, args, isforward=False):
     return data_loader
 
 
-def create_data_loaders_for_resunet(data_path, args, isforward=False):
-    if not isforward:
-        max_key_ = args.max_key
-        target_key_ = args.target_key
-    else:
-        max_key_ = -1
-        target_key_ = -1
+def create_train_data_loaders_for_resunet(data_path, args):
+    max_key_ = args.max_key
+    target_key_ = args.target_key
 
     data_storage = ResUnetSliceData(
         root=data_path,
-        transform=ResUnetDataTransform(isforward, max_key_),
+        transform=ResUnetDataTransform(max_key=max_key_, use_augment=True),
         input_key=args.input_key,
         target_key=target_key_,
-        forward=isforward
+    )
+
+    data_loader = DataLoader(
+        dataset=data_storage,
+        batch_size=args.batch_size
+    )
+
+    return data_loader
+
+def create_val_data_loaders_for_resunet(data_path, args):
+    max_key_ = args.max_key
+    target_key_ = args.target_key
+
+    data_storage = ResUnetSliceData(
+        root=data_path,
+        transform=ResUnetDataTransform(max_key=max_key_, use_augment=False),
+        input_key=args.input_key,
+        target_key=target_key_,
     )
 
     data_loader = DataLoader(
