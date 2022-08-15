@@ -1,6 +1,6 @@
 import h5py
 import random
-from utils.data.transforms import VarnetDataTransform, UnetDataTransform, ResUnetDataTransform
+from utils.data.transforms import VarnetDataTransform, UnetDataTransform, ResUnetDataTransform, ADLDataTransform
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
 import numpy as np
@@ -98,7 +98,7 @@ class image_SliceData(Dataset):
         return self.transform(input, target, attrs, fname.name, dataslice)
 
 
-class ResUnetSliceData(Dataset):
+class MultichannelSliceData(Dataset):
     def __init__(self, root, transform, input_key, target_key):
         self.transform = transform
         self.input_key = input_key
@@ -135,7 +135,7 @@ class ResUnetSliceData(Dataset):
         return self.transform(input, target, attrs, fname.name, dataslice)
 
 
-def create_data_loaders(data_path, args, isforward=False):
+def create_data_loaders(data_path, args, use_augment=False, isforward=False):
     if isforward == False:
         max_key_ = args.max_key
         target_key_ = args.target_key
@@ -143,7 +143,7 @@ def create_data_loaders(data_path, args, isforward=False):
         max_key_ = -1
         target_key_ = -1
 
-    if args.input_type == 'kspace':
+    if args.model_type == 'Varnet':
         data_storage = kspace_SliceData(
             root=data_path,
             transform=VarnetDataTransform(isforward, max_key_),
@@ -151,13 +151,27 @@ def create_data_loaders(data_path, args, isforward=False):
             target_key=target_key_,
             forward=isforward,
         )
-    elif args.input_type == 'image':
+    elif args.model_type == 'Unet':
         data_storage = image_SliceData(
             root=data_path,
             transform=UnetDataTransform(isforward, max_key_),
             input_key=args.input_key,
             target_key=target_key_,
             forward=isforward
+        )
+    elif args.model_type == 'Resunet':
+        data_storage = MultichannelSliceData(
+            root=data_path,
+            transform=ResUnetDataTransform(max_key=max_key_, use_augment=use_augment),
+            input_key=args.input_key,
+            target_key=target_key_,
+        )
+    elif args.model_type == 'ADL':
+        data_storage = MultichannelSliceData(
+            root=data_path,
+            transform=ADLDataTransform(max_key=max_key_, use_augment=use_augment),
+            input_key=args.input_key,
+            target_key=target_key_,
         )
 
     data_loader = DataLoader(
@@ -167,38 +181,3 @@ def create_data_loaders(data_path, args, isforward=False):
     return data_loader
 
 
-def create_train_data_loaders_for_resunet(data_path, args):
-    max_key_ = args.max_key
-    target_key_ = args.target_key
-
-    data_storage = ResUnetSliceData(
-        root=data_path,
-        transform=ResUnetDataTransform(max_key=max_key_, use_augment=True),
-        input_key=args.input_key,
-        target_key=target_key_,
-    )
-
-    data_loader = DataLoader(
-        dataset=data_storage,
-        batch_size=args.batch_size
-    )
-
-    return data_loader
-
-def create_val_data_loaders_for_resunet(data_path, args):
-    max_key_ = args.max_key
-    target_key_ = args.target_key
-
-    data_storage = ResUnetSliceData(
-        root=data_path,
-        transform=ResUnetDataTransform(max_key=max_key_, use_augment=False),
-        input_key=args.input_key,
-        target_key=target_key_,
-    )
-
-    data_loader = DataLoader(
-        dataset=data_storage,
-        batch_size=args.batch_size
-    )
-
-    return data_loader

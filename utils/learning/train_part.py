@@ -8,7 +8,7 @@ from pathlib import Path
 import copy
 
 from collections import defaultdict
-from utils.data.load_data import create_data_loaders, create_train_data_loaders_for_resunet, create_val_data_loaders_for_resunet
+from utils.data.load_data import create_data_loaders
 from utils.common.utils import save_reconstructions, ssim_loss
 from utils.common.loss_function import SSIMLoss
 from utils.model.varnet import VarNet
@@ -130,6 +130,7 @@ def unet_validate(args, model, data_loader, loss_type, ssim_func):
 
     total_loss = 0.
     total_ssim = 0.
+    len_loader = len(data_loader)
 
     with torch.no_grad():
         for iter, data in enumerate(data_loader):
@@ -165,7 +166,9 @@ def unet_validate(args, model, data_loader, loss_type, ssim_func):
             [out for _, out in sorted(targets[fname].items())]
         )
     num_subjects = len(reconstructions)
-    return total_loss, total_ssim, num_subjects, reconstructions, targets, None, time.perf_counter() - start
+    val_loss = total_loss/len_loader
+    val_ssim = total_ssim/len_loader
+    return val_loss, val_ssim, num_subjects, reconstructions, targets, None, time.perf_counter() - start
 
 
 def save_model(args, exp_dir, epoch, model, optimizer, scheduler, train_ssim, best_val_ssim, is_new_best):
@@ -212,13 +215,14 @@ def varnet_train(args):
 
     model = VarNet(num_cascades=args.cascade)
     model.to(device=device)
+    '''
     FOLDER = "/root/result/test_varnet/checkpoints/"
     url_root = "https://dl.fbaipublicfiles.com/fastMRI/trained_models/varnet/"
     # using pretrained parameter
     # MODEL_FNAMES = "brain_leaderboard_state_dict.pt"
     # using finetuned parameter
     MODEL_FNAMES = "best_model_ep11_0.028276184172645012.pt"
-
+    
     if not Path(FOLDER + MODEL_FNAMES).exists():
         print('no such pretrained model')
         download_model(url_root + MODEL_FNAMES, MODEL_FNAMES)
@@ -238,7 +242,7 @@ def varnet_train(args):
             model.load_state_dict(pretrained)
         else:
             model.load_state_dict(pretrained['model'])
-
+    '''
     loss_type = SSIMLoss().to(device=device)
 
     optimizer = torch.optim.RAdam(
@@ -247,9 +251,19 @@ def varnet_train(args):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, args.num_epochs, eta_min=1e-6
     )
-
     best_val_loss = 1.
     start_epoch = 0
+
+    if args.pretrained_file_path is not None:
+        checkpoint = torch.load(args.pretrained_file_path)
+        model.load_state_dict(checkpoint['model'])
+
+        if args.continue_training is True:
+            best_val_loss = checkpoint['best_val_loss']
+            start_epoch = checkpoint['epoch']
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            scheduler.load_state_dict(checkpoint['scheduler'])
+
 
     train_loader = create_data_loaders(data_path=args.data_path_train, args=args)
     val_loader = create_data_loaders(data_path=args.data_path_val, args=args)
@@ -349,17 +363,19 @@ def unet_train(args):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, args.num_epochs, eta_min=1e-6
     )
+    best_val_ssim = 1.
+    start_epoch = 0
 
-    if args.pretrained_file_path is None:
-        best_val_ssim = 1.
-        start_epoch = 0
-    else:
+    if args.pretrained_file_path is not None:
+        print('load pretrained model')
         checkpoint = torch.load(args.pretrained_file_path)
-        best_val_ssim = checkpoint['best_val_ssim']
-        start_epoch = checkpoint['epoch']
-        optimizer.load_state_dict(checkpoint['optimizer'])
-        scheduler.load_state_dict(checkpoint['scheduler'])
         model.load_state_dict(checkpoint['model'])
+
+        if args.continue_training is True:
+            best_val_ssim = checkpoint['best_val_ssim']
+            start_epoch = checkpoint['epoch']
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            scheduler.load_state_dict(checkpoint['scheduler'])
 
     train_loader = create_data_loaders(data_path=args.data_path_train, args=args)
     val_loader = create_data_loaders(data_path=args.data_path_val, args=args)
@@ -377,9 +393,6 @@ def unet_train(args):
         val_loss = torch.tensor(val_loss).cuda(non_blocking=True)
         val_ssim = torch.tensor(val_ssim).cuda(non_blocking=True)
         num_subjects = torch.tensor(num_subjects).cuda(non_blocking=True)
-
-        val_loss = val_loss / num_subjects
-        val_ssim = val_ssim / num_subjects
 
         is_new_best = val_ssim < best_val_ssim
         best_val_ssim = min(best_val_ssim, val_ssim)
@@ -443,8 +456,7 @@ def resunet_train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
     len_loader = len(data_loader)
     total_loss = 0.
 
-    pbar = tqdm(data_loader, desc=f"Training epoch{epoch}", bar_format='{l_bar}{bar:80}{r_bar}')
-
+    pbar = tqdm(data_loader)
     for iter, data in enumerate(pbar):
         image, target, maximum, mean, std, _, _ = data
         image = image.cuda(non_blocking=True)
@@ -463,20 +475,19 @@ def resunet_train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
-
-        pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+        pbar.set_description(f"Training loss = {loss.item():4f}")
 
         # print('shape: output_{}, target_{}, std_{}, mean_{}'.format(output.shape, target.shape, std.shape, mean.shape))
-
-        # if iter % (args.report_interval // args.batch_size) == 0:
-        #     print(
-        #         f'Epoch = [{epoch:3d}/{args.num_epochs:3d}] '
-        #         f'Iter = [{iter:4d}/{len(data_loader):4d}] '
-        #         f'Loss = {loss.item():.4g} '
-        #         f'Time = {time.perf_counter() - start_iter:.4f}s',
-        #     )
-        #     start_iter = time.perf_counter()
-
+        '''
+        if iter % (args.report_interval // args.batch_size) == 0:
+            print(
+                f'Epoch = [{epoch:3d}/{args.num_epochs:3d}] '
+                f'Iter = [{iter:4d}/{len(data_loader):4d}] '
+                f'Loss = {loss.item():.4g} '
+                f'Time = {time.perf_counter() - start_iter:.4f}s',
+            )
+            start_iter = time.perf_counter()
+        '''
     total_loss = total_loss / len_loader
     return total_loss, time.perf_counter() - start_epoch
 
@@ -494,12 +505,11 @@ def resunet_train(args):
         model.parameters(), lr=args.lr, weight_decay=args.weight_decay
     )
     # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-    #     optimizer, args.num_epochs, eta_min=1e-6
+    #    optimizer, args.num_epochs, eta_min=1e-6
     # )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, factor=0.1, patience=2, threshold=0.0001
     )
-
     best_val_ssim = 1.
     start_epoch = 0
 
@@ -508,19 +518,18 @@ def resunet_train(args):
         checkpoint = torch.load(args.pretrained_file_path)
         model.load_state_dict(checkpoint['model'])
 
-        if args.continue_training:
+        if args.continue_training is True:
             best_val_ssim = checkpoint['best_val_ssim']
             start_epoch = checkpoint['epoch']
             optimizer.load_state_dict(checkpoint['optimizer'])
             scheduler.load_state_dict(checkpoint['scheduler'])
-            args = checkpoint['args']
 
-    train_loader = create_train_data_loaders_for_resunet(data_path=args.data_path_train, args=args)
-    val_loader = create_val_data_loaders_for_resunet(data_path=args.data_path_val, args=args)
+    train_loader = create_data_loaders(data_path=args.data_path_train, args=args, use_augment=True)
+    val_loader = create_data_loaders(data_path=args.data_path_val, args=args, use_augment=False)
 
     for epoch in range(start_epoch, args.num_epochs):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
-        print(f"learning rate: {optimizer.param_groups[0]['lr']:.4f}")
+        print('learning rate: {}'.format(optimizer.param_groups[0]['lr']))
 
         train_loss, train_time = resunet_train_epoch(args, epoch, model, train_loader, optimizer, loss_type)
         val_loss, num_subjects, reconstructions, targets, inputs, val_time = \
@@ -548,5 +557,4 @@ def resunet_train(args):
             print(
                 f'ForwardTime = {time.perf_counter() - start:.4f}s',
             )
-
         scheduler.step(val_loss)
