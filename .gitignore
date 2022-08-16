@@ -11,3 +11,6 @@ venv/
 # check file
 check_hjl.py
 check_ksunw.py
+
+# mlp mixer
+imaging_MLPs-master

@@ -5,7 +5,7 @@ if os.getcwd() + '/utils/model/' not in sys.path:
     sys.path.insert(1, os.getcwd() + '/utils/model/')
 sys.path.append('/root/fastMRI_hjl')
 
-from utils.learning.train_part import varnet_train, unet_train, resunet_train
+from utils.learning.train_part import varnet_train, unet_train, resunet_train, mlpmixer_train
 from pathlib import Path
 
 def str2bool(v):
@@ -67,3 +67,5 @@ if __name__ == '__main__':
         unet_train(args)
     elif args.model_type == 'Resunet':
         resunet_train(args)
+    elif args.model_type == 'MLPMixer':
+        mlpmixer_train(args)
