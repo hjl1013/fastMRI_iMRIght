@@ -180,26 +180,3 @@ def create_data_loaders(data_path, args, use_augment=False, isforward=False):
         batch_size=args.batch_size
     )
     return data_loader
-
-def create_data_loaders_for_resunet(data_path, args, isforward=False):
-    if not isforward:
-        max_key_ = args.max_key
-        target_key_ = args.target_key
-    else:
-        max_key_ = -1
-        target_key_ = -1
-
-    data_storage = ResUnetSliceData(
-        root=data_path,
-        transform=ResUnetDataTransform(isforward, max_key_),
-        input_key=args.input_key,
-        target_key=target_key_,
-        forward=isforward
-    )
-
-    data_loader = DataLoader(
-        dataset=data_storage,
-        batch_size=args.batch_size
-    )
-
-    return data_loader
