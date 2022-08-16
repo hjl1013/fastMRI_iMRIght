@@ -8,7 +8,7 @@ from pathlib import Path
 import copy
 
 from collections import defaultdict
-from utils.data.load_data import create_data_loaders
+from utils.data.load_data import create_data_loaders, create_data_loaders_for_resunet
 from utils.common.utils import save_reconstructions, ssim_loss
 from utils.common.loss_function import SSIMLoss
 from utils.model.varnet import VarNet
@@ -475,6 +475,7 @@ def resunet_train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
         loss.backward()
         optimizer.step()
         total_loss += loss.item()
+
         pbar.set_description(f"Training loss = {loss.item():4f}")
 
         # print('shape: output_{}, target_{}, std_{}, mean_{}'.format(output.shape, target.shape, std.shape, mean.shape))

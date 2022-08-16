@@ -14,7 +14,7 @@ class ResUnetPlusPlus(nn.Module):
         super(ResUnetPlusPlus, self).__init__()
 
         self.channel = channel
-
+        
         self.input_layer = nn.Sequential(
             nn.Conv2d(channel, filters[0], kernel_size=3, padding=1),
             nn.BatchNorm2d(filters[0]),
@@ -85,6 +85,7 @@ class ResUnetPlusPlus(nn.Module):
         x8 = self.up_residual_conv3(x8)
 
         x9 = self.aspp_out(x8)
+
         if self.channel == 1:
             out = self.output_layer(x9) + x
         else:
