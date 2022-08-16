@@ -600,7 +600,7 @@ def mlpmixer_train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
     pbar = tqdm(data_loader, desc=f"Training epoch{epoch}", bar_format='{l_bar}{bar:80}{r_bar}')
 
     for iter, data in enumerate(pbar):
-        image, target, maximum, mean, std, _, _ = data
+        image, target, mean, std, _, _, maximum = data
         image = image.cuda(non_blocking=True)
         target = target.cuda(non_blocking=True)
         maximum = maximum.cuda(non_blocking=True)
@@ -676,16 +676,16 @@ def mlpmixer_train(args):
             scheduler.load_state_dict(checkpoint['scheduler'])
             args = checkpoint['args']
 
-    train_loader = create_train_data_loaders_for_resunet(data_path=args.data_path_train, args=args)
-    val_loader = create_val_data_loaders_for_resunet(data_path=args.data_path_val, args=args)
+    train_loader = create_data_loaders(data_path=args.data_path_train, args=args)
+    val_loader = create_data_loaders(data_path=args.data_path_val, args=args)
 
     for epoch in range(start_epoch, args.num_epochs):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
         print(f"learning rate: {optimizer.param_groups[0]['lr']:.4f}")
 
-        train_loss, train_time = resunet_train_epoch(args, epoch, model, train_loader, optimizer, loss_type)
+        train_loss, train_time = mlpmixer_train_epoch(args, epoch, model, train_loader, optimizer, loss_type)
         val_loss, num_subjects, reconstructions, targets, inputs, val_time = \
-            resunet_validate(args, model, val_loader, loss_type)
+            mlpmixer_validate(args, model, val_loader, loss_type)
 
         train_loss = torch.tensor(train_loss).cuda(non_blocking=True)
         val_loss = torch.tensor(val_loss).cuda(non_blocking=True)
