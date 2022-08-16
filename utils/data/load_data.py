@@ -1,7 +1,7 @@
 import h5py
 import random
 
-from utils.data.transforms import VarnetDataTransform, UnetDataTransform, ResUnetDataTransform, ADLDataTransform
+from utils.data.transforms import VarnetDataTransform, UnetDataTransform, MultichannelDataTransform, ADLDataTransform
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
 import numpy as np
@@ -100,9 +100,10 @@ class image_SliceData(Dataset):
 
 
 class MultichannelSliceData(Dataset):
-    def __init__(self, root, transform, input_key, target_key):
+    def __init__(self, root, transform, input_key, input_num, target_key):
         self.transform = transform
         self.input_key = input_key
+        self.input_num = input_num
         self.target_key = target_key
         self.examples = []
 
@@ -133,7 +134,7 @@ class MultichannelSliceData(Dataset):
             ])
             target = hf[self.target_key][dataslice]
             attrs = dict(hf.attrs)
-        return self.transform(input, target, attrs, fname.name, dataslice)
+        return self.transform(input, self.input_num, target, attrs, fname.name, dataslice)
 
 
 def create_data_loaders(data_path, args, use_augment=False, isforward=False):
@@ -160,11 +161,12 @@ def create_data_loaders(data_path, args, use_augment=False, isforward=False):
             target_key=target_key_,
             forward=isforward
         )
-    elif args.model_type == 'Resunet':
+    elif args.model_type in ['ResUnet', 'MLPMixer', 'NAFNet']:
         data_storage = MultichannelSliceData(
             root=data_path,
-            transform=ResUnetDataTransform(max_key=max_key_, use_augment=use_augment),
+            transform=MultichannelDataTransform(max_key=max_key_, use_augment=use_augment),
             input_key=args.input_key,
+            input_num=args.input_num,
             target_key=target_key_,
         )
     elif args.model_type == 'ADL':
@@ -172,6 +174,7 @@ def create_data_loaders(data_path, args, use_augment=False, isforward=False):
             root=data_path,
             transform=ADLDataTransform(max_key=max_key_, use_augment=use_augment),
             input_key=args.input_key,
+            input_num=args.input_num,
             target_key=target_key_,
         )
 

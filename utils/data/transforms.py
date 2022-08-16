@@ -102,14 +102,14 @@ class UnetDataTransform:
 
         return input, target, mean, std, fname, slice, maximum
 
-class ResUnetDataTransform:
+class MultichannelDataTransform:
     def __init__(self, max_key, use_augment):
         self.max_key = max_key
         self.use_augment = use_augment
-    def __call__(self, input, target, attrs, fname, slice):
+    def __call__(self, input, input_num, target, attrs, fname, slice):
 
         input = to_tensor(input).type(torch.FloatTensor)
-        # input = input[3:]
+        input = input[-input_num:]
         # normalize input
         input, mean, std = normalize_instance(input, eps=1e-11)
         input = input.clamp(-6, 6)
@@ -124,17 +124,17 @@ class ResUnetDataTransform:
         if self.use_augment:
             input, target = random_augment(input, target)
 
-        return input, target, maximum, mean, std, fname, slice
+        return input, target, mean, std, fname, slice, maximum
 
 class ADLDataTransform:
     def __init__(self, max_key, use_augment):
         self.max_key = max_key
         self.use_augment = use_augment
 
-    def __call__(self, input, target, attrs, fname, slice):
+    def __call__(self, input, input_num, target, attrs, fname, slice):
 
         input = to_tensor(input).type(torch.FloatTensor)
-        input = input[3:]
+        input = input[-input_num:]
 
         # normalize input
         input, min, max = minmaxScale(input)
