@@ -1,6 +1,7 @@
 import shutil
 import numpy as np
 import torch
+from torch.cuda.amp import autocast, GradScaler
 from torchinfo import summary
 import time
 import requests
@@ -220,7 +221,7 @@ def imtoim_validate(args, model, data_loader, loss_type):
     return val_loss, num_subjects, reconstructions, targets, None, time.perf_counter() - start
 
 
-def imtoim_train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
+def imtoim_train_epoch(args, epoch, model, data_loader, optimizer, scaler, iters_to_accumulate, loss_type):
     model.train()
     start_epoch = start_iter = time.perf_counter()
     len_loader = len(data_loader)
@@ -229,26 +230,35 @@ def imtoim_train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
     pbar = tqdm(data_loader, desc=f"Training epoch{epoch}", bar_format='{l_bar}{bar:80}{r_bar}')
 
     for iter, data in enumerate(pbar):
-        input, target, mean, std, _, _, maximum = data
-        input = input.cuda(non_blocking=True)
-        target = target.cuda(non_blocking=True)
-        maximum = maximum.cuda(non_blocking=True)
-        mean = mean.cuda(non_blocking=True)
-        std = std.cuda(non_blocking=True)
+        with autocast(enabled=False):
+            input, target, mean, std, _, _, maximum = data
+            input = input.cuda(non_blocking=True)
+            target = target.cuda(non_blocking=True)
+            maximum = maximum.cuda(non_blocking=True)
+            mean = mean.cuda(non_blocking=True)
+            std = std.cuda(non_blocking=True)
+            std = std[:, None, None, None]
+            mean = mean[:, None, None, None]
+            target = target * std + mean
+            output = model(input)
+            output = output * std + mean
+            #print(maximum)
+            loss = loss_type(output, target, maximum)  # default SSIM loss
+            #print(loss)
+            pbar.set_postfix({"loss": f"{loss.item():.4f}"})
 
-        output = model(input)
-        std = std[:, None, None, None]
-        mean = mean[:, None, None, None]
-        output = output * std + mean
-        target = target * std + mean
+            total_loss += loss.item()
+            loss = loss / iters_to_accumulate
 
-        loss = loss_type(output, target, maximum)  # default SSIM loss
-        optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
-        total_loss += loss.item()
+        # Accumulates scaled gradients.
+        scaler.scale(loss).backward()
 
-        pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+        if (iter + 1) % iters_to_accumulate == 0:
+            # may unscale_ here if desired (e.g., to allow clipping unscaled gradients)
+
+            scaler.step(optimizer)
+            scaler.update()
+            optimizer.zero_grad()
 
         # print('shape: output_{}, target_{}, std_{}, mean_{}'.format(output.shape, target.shape, std.shape, mean.shape))
 
@@ -310,6 +320,7 @@ def imtoim_train(args):
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
         optimizer, factor=0.1, patience=2, threshold=0.0001
     )
+    scaler = GradScaler(enabled=False)
 
     best_val_ssim = 1.
     start_epoch = 0
@@ -328,12 +339,14 @@ def imtoim_train(args):
 
     train_loader = create_data_loaders(data_path=args.data_path_train, args=args, use_augment=True)
     val_loader = create_data_loaders(data_path=args.data_path_val, args=args, use_augment=False)
+    iters_to_accumulate = args.batch_update / args.batch_size
 
     for epoch in range(start_epoch, args.num_epochs):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
         print(f"learning rate: {optimizer.param_groups[0]['lr']:.4f}")
 
-        train_loss, train_time = imtoim_train_epoch(args, epoch, model, train_loader, optimizer, loss_type)
+        train_loss, train_time = \
+            imtoim_train_epoch(args, epoch, model, train_loader, optimizer, scaler, iters_to_accumulate,loss_type)
         val_loss, num_subjects, reconstructions, targets, inputs, val_time = \
             imtoim_validate(args, model, val_loader, loss_type)
 
