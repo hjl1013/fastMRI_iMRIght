@@ -94,8 +94,6 @@ class UnetDataTransform:
 
             # target = center_crop(target, crop_size)
             target = target[None, ...]
-            target = normalize(target, mean, std, eps=1e-11)
-            target = target.clamp(-6, 6)
         else:
             target = -1
             maximum = -1
@@ -118,8 +116,6 @@ class MultichannelDataTransform:
 
         target = to_tensor(target)
         target = target[None, ...]
-        target = normalize(target, mean, std, eps=1e-11)
-        target = target.clamp(-6, 6)
 
         if self.use_augment:
             input, target = random_augment(input, target)

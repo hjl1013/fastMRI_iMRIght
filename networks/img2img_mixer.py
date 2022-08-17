@@ -109,6 +109,7 @@ class Img2Img_Mixer(nn.Module):
         self,
         img_size: int = 320,
         img_channels: int = 1,
+        output_channels: int = 1,
         patch_size: int = 4,
         embed_dim: int = 128,
         num_layers: int = 16,
@@ -122,7 +123,7 @@ class Img2Img_Mixer(nn.Module):
             for _ in range(num_layers)]
         self.mixer_layers = nn.Sequential(*layers)
 
-        self.patch_expand = PatchExpansion(patch_size, embed_dim, img_channels)
+        self.patch_expand = PatchExpansion(patch_size, embed_dim, output_channels)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
                 
@@ -130,4 +131,4 @@ class Img2Img_Mixer(nn.Module):
         x = self.mixer_layers(x)
         x = self.patch_expand(x)
         
-        return x        
+        return x

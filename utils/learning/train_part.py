@@ -94,18 +94,29 @@ def varnet_train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
     total_loss = total_loss / len_loader
     return total_loss, time.perf_counter() - start_epoch
 
-def varnet_validate(args, model, data_loader):
+def varnet_validate(args, model, data_loader, loss_type):
     model.eval()
     reconstructions = defaultdict(dict)
     targets = defaultdict(dict)
     start = time.perf_counter()
 
+    len_loader = len(data_loader)
+    total_val_loss = 0.
+
+    pbar = tqdm(data_loader, desc=f"Validating...", bar_format='{l_bar}{bar:80}{r_bar}')
+
     with torch.no_grad():
-        for iter, data in enumerate(data_loader):
-            mask, kspace, target, _, fnames, slices = data
+        for iter, data in enumerate(pbar):
+            mask, kspace, target, maximum, fnames, slices = data
             kspace = kspace.cuda(non_blocking=True)
             mask = mask.cuda(non_blocking=True)
+            maximum = maximum.cuda(non_blocking=True)
             output = model(kspace, mask)
+
+            loss = loss_type(output, target, maximum)
+            total_val_loss += loss.item()
+
+            pbar.set_postfix({"Validation loss": f"{loss.item():.4f}"})
 
             for i in range(output.shape[0]):
                 reconstructions[fnames[i]][int(slices[i])] = output[i].cpu().numpy()
@@ -119,9 +130,9 @@ def varnet_validate(args, model, data_loader):
         targets[fname] = np.stack(
             [out for _, out in sorted(targets[fname].items())]
         )
-    val_loss = sum([ssim_loss(targets[fname], reconstructions[fname]) for fname in reconstructions])
-    num_subjects = len(reconstructions)
-    return val_loss, num_subjects, reconstructions, targets, None, time.perf_counter() - start
+
+    val_loss = total_val_loss / len_loader
+    return val_loss, reconstructions, targets, None, time.perf_counter() - start
 
 def varnet_train(args):
     device = torch.device(f'cuda:{args.GPU_NUM}' if torch.cuda.is_available() else 'cpu')
@@ -135,8 +146,11 @@ def varnet_train(args):
     optimizer = torch.optim.RAdam(
         model.parameters(), lr=args.lr, weight_decay=args.weight_decay
     )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, args.num_epochs, eta_min=1e-6
+    # scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+    #     optimizer, args.num_epochs, eta_min=1e-8
+    # )
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer, factor=args.factor, patience=2, threshold=0.0001
     )
     best_val_loss = 1.
     start_epoch = 0
@@ -146,7 +160,7 @@ def varnet_train(args):
         model.load_state_dict(checkpoint['model'])
 
         if args.continue_training is True:
-            best_val_loss = checkpoint['best_val_loss']
+            best_val_loss = checkpoint['best_val_ssim']
             start_epoch = checkpoint['epoch']
             optimizer.load_state_dict(checkpoint['optimizer'])
             scheduler.load_state_dict(checkpoint['scheduler'])
@@ -161,13 +175,10 @@ def varnet_train(args):
 
         train_loss, train_time = varnet_train_epoch(args, epoch, model, train_loader, optimizer, loss_type)
         scheduler.step()
-        val_loss, num_subjects, reconstructions, targets, inputs, val_time = varnet_validate(args, model, val_loader)
+        val_loss, reconstructions, targets, inputs, val_time = varnet_validate(args, model, val_loader, loss_type)
 
         train_loss = torch.tensor(train_loss).cuda(non_blocking=True)
         val_loss = torch.tensor(val_loss).cuda(non_blocking=True)
-        num_subjects = torch.tensor(num_subjects).cuda(non_blocking=True)
-
-        val_loss = val_loss / num_subjects
 
         is_new_best = val_loss < best_val_loss
         best_val_loss = min(best_val_loss, val_loss)
@@ -194,19 +205,29 @@ def imtoim_validate(args, model, data_loader, loss_type):
     targets = defaultdict(dict)
     start = time.perf_counter()
 
+    len_loader = len(data_loader)
+    total_val_loss = 0.
+
+    pbar = tqdm(data_loader, desc=f"Validating...", bar_format='{l_bar}{bar:80}{r_bar}')
+
     with torch.no_grad():
-        for iter, data in enumerate(data_loader):
-            input, target, mean, std, fnames, slices, _ = data
+        for iter, data in enumerate(pbar):
+            input, target, mean, std, fnames, slices, maximum = data
             input = input.cuda(non_blocking=True)
             target = target.cuda(non_blocking=True)
             mean = mean.cuda(non_blocking=True)
             std = std.cuda(non_blocking=True)
+            maximum = maximum.cuda(non_blocking=True)
             output = model(input)
 
             std = std[:, None, None, None]
             mean = mean[:, None, None, None]
             output = output * std + mean
-            target = target * std + mean
+
+            loss = loss_type(output, target, maximum)
+            total_val_loss = loss.item()
+
+            pbar.set_postfix({"Validation loss": f"{loss.item():.4f}"})
 
             for i in range(output.shape[0]):
                 reconstructions[fnames[i]][int(slices[i])] = output[i][0].cpu().numpy()
@@ -220,9 +241,9 @@ def imtoim_validate(args, model, data_loader, loss_type):
         targets[fname] = np.stack(
             [out for _, out in sorted(targets[fname].items())]
         )
-    val_loss = sum([ssim_loss(targets[fname], reconstructions[fname]) for fname in reconstructions])
-    num_subjects = len(reconstructions)
-    return val_loss, num_subjects, reconstructions, targets, None, time.perf_counter() - start
+
+    val_loss = total_val_loss / len_loader
+    return val_loss, reconstructions, targets, None, time.perf_counter() - start
 
 
 def imtoim_train_epoch(args, epoch, model, data_loader, optimizer, scaler, iters_to_accumulate, loss_type):
@@ -243,12 +264,12 @@ def imtoim_train_epoch(args, epoch, model, data_loader, optimizer, scaler, iters
             std = std.cuda(non_blocking=True)
             std = std[:, None, None, None]
             mean = mean[:, None, None, None]
-            target = target * std + mean
             output = model(input)
+
             output = output * std + mean
-            #print(maximum)
+
             loss = loss_type(output, target, maximum)  # default SSIM loss
-            #print(loss)
+
             pbar.set_postfix({"loss": f"{loss.item():.4f}"})
 
             total_loss += loss.item()
@@ -289,10 +310,11 @@ def imtoim_train(args):
         model = Unet(in_chans=1, out_chans=1, chans=256, num_pool_layers=3, drop_prob=0.0)
     if args.model_type == 'ResUnet':
         model = ResUnetPlusPlus(channel=args.input_num)
-    if args.model_type == 'MLPMi`xer':
+    if args.model_type == 'MLPMixer':
         net = Img2Img_Mixer(
-            img_size=320,
-            img_channels=1,
+            img_size=384,
+            img_channels=4,
+            output_channels=1,
             patch_size=4,
             embed_dim=128,
             num_layers=16,
@@ -350,15 +372,12 @@ def imtoim_train(args):
         print(f"learning rate: {optimizer.param_groups[0]['lr']:.5f}")
 
         train_loss, train_time = \
-            imtoim_train_epoch(args, epoch, model, train_loader, optimizer, scaler, iters_to_accumulate,loss_type)
-        val_loss, num_subjects, reconstructions, targets, inputs, val_time = \
+            imtoim_train_epoch(args, epoch, model, train_loader, optimizer, scaler, iters_to_accumulate, loss_type)
+        val_loss, reconstructions, targets, inputs, val_time = \
             imtoim_validate(args, model, val_loader, loss_type)
 
         train_loss = torch.tensor(train_loss).cuda(non_blocking=True)
         val_loss = torch.tensor(val_loss).cuda(non_blocking=True)
-        num_subjects = torch.tensor(num_subjects).cuda(non_blocking=True)
-
-        val_loss = val_loss / num_subjects
 
         is_new_best = val_loss < best_val_ssim
         best_val_ssim = min(best_val_ssim, val_loss)
