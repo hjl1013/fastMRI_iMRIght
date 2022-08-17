@@ -87,8 +87,8 @@ class NAFNet(nn.Module):
 
         self.intro = nn.Conv2d(in_channels=img_channel, out_channels=width, kernel_size=3, padding=1, stride=1, groups=1,
                               bias=True)
-        self.ending = nn.Conv2d(in_channels=width, out_channels=img_channel, kernel_size=3, padding=1, stride=1, groups=1,
-                              bias=True)
+        self.ending = nn.Conv2d(in_channels=width, out_channels=1, kernel_size=3, padding=1, stride=1, groups=1,
+                              bias=True) # set out_channels to 1
 
         self.encoders = nn.ModuleList()
         self.decoders = nn.ModuleList()
@@ -150,7 +150,7 @@ class NAFNet(nn.Module):
             x = decoder(x)
 
         x = self.ending(x)
-        x = x + inp
+        x = x + 0.6*inp[:, -1:, :, :] + 0.4*inp[:, -2:-1, :, :]
 
         return x[:, :, :H, :W]
 

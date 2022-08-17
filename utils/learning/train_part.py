@@ -153,7 +153,7 @@ def varnet_train(args):
 
     for epoch in range(start_epoch, args.num_epochs):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
-        print(f"learning rate: {optimizer.param_groups[0]['lr']:.4f}")
+        print(f"learning rate: {optimizer.param_groups[0]['lr']:.5f}")
 
         train_loss, train_time = varnet_train_epoch(args, epoch, model, train_loader, optimizer, loss_type)
         scheduler.step()
@@ -285,7 +285,7 @@ def imtoim_train(args):
         model = Unet(in_chans=1, out_chans=1, chans=256, num_pool_layers=3, drop_prob=0.0)
     if args.model_type == 'ResUnet':
         model = ResUnetPlusPlus(channel=args.input_num)
-    if args.model_type == 'MLPMixer':
+    if args.model_type == 'MLPMi`xer':
         net = Img2Img_Mixer(
             img_size=320,
             img_channels=1,
@@ -299,13 +299,13 @@ def imtoim_train(args):
         img_channel = args.input_num
         width = 32
 
-        # enc_blks = [2, 2, 4, 8]
-        # middle_blk_num = 12
-        # dec_blks = [2, 2, 2, 2]
+        enc_blks = [2, 2, 4, 8]
+        middle_blk_num = 12
+        dec_blks = [2, 2, 2, 2]
 
-        enc_blks = [1, 1, 1, 28]
-        middle_blk_num = 1
-        dec_blks = [1, 1, 1, 1]
+        #enc_blks = [1, 1, 1, 28]
+        #middle_blk_num = 1
+        #dec_blks = [1, 1, 1, 1]
         model = NAFNet(img_channel=img_channel, width=width, middle_blk_num=middle_blk_num,
                        enc_blk_nums=enc_blks, dec_blk_nums=dec_blks)
     summary(model, input_size=(1, args.input_num, 384, 384))
@@ -318,7 +318,7 @@ def imtoim_train(args):
     #     optimizer, args.num_epochs, eta_min=1e-6
     # )
     scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer, factor=0.1, patience=2, threshold=0.0001
+        optimizer, factor=args.factor, patience=2, threshold=0.0001
     )
     scaler = GradScaler(enabled=False)
 
@@ -343,7 +343,7 @@ def imtoim_train(args):
 
     for epoch in range(start_epoch, args.num_epochs):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
-        print(f"learning rate: {optimizer.param_groups[0]['lr']:.4f}")
+        print(f"learning rate: {optimizer.param_groups[0]['lr']:.5f}")
 
         train_loss, train_time = \
             imtoim_train_epoch(args, epoch, model, train_loader, optimizer, scaler, iters_to_accumulate,loss_type)
