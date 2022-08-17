@@ -3,7 +3,7 @@ import os, sys
 
 if os.getcwd() + '/utils/model/' not in sys.path:
     sys.path.insert(1, os.getcwd() + '/utils/model/')
-sys.path.append('/root/ksunw')
+sys.path.append('/root/fastMRI_hjl')
 
 from utils.learning.train_part import varnet_train, imtoim_train
 from pathlib import Path

@@ -64,7 +64,9 @@ def varnet_train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
     len_loader = len(data_loader)
     total_loss = 0.
 
-    for iter, data in tqdm(enumerate(data_loader)):
+    pbar = tqdm(data_loader, desc=f"Training epoch{epoch}", bar_format='{l_bar}{bar:80}{r_bar}')
+
+    for iter, data in enumerate(pbar):
         mask, kspace, target, maximum, _, _ = data
         mask = mask.cuda(non_blocking=True)
         kspace = kspace.cuda(non_blocking=True)
@@ -78,14 +80,16 @@ def varnet_train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
         optimizer.step()
         total_loss += loss.item()
 
-        if iter % args.report_interval == 0:
-            print(
-                f'Epoch = [{epoch:3d}/{args.num_epochs:3d}] '
-                f'Iter = [{iter:4d}/{len(data_loader):4d}] '
-                f'Loss = {loss.item():.4g} '
-                f'Time = {time.perf_counter() - start_iter:.4f}s',
-            )
-            start_iter = time.perf_counter()
+        pbar.set_postfix({"loss": f"{loss.item():.4f}"})
+
+        # if iter % args.report_interval == 0:
+        #     print(
+        #         f'Epoch = [{epoch:3d}/{args.num_epochs:3d}] '
+        #         f'Iter = [{iter:4d}/{len(data_loader):4d}] '
+        #         f'Loss = {loss.item():.4g} '
+        #         f'Time = {time.perf_counter() - start_iter:.4f}s',
+        #     )
+        #     start_iter = time.perf_counter()
     total_loss = total_loss / len_loader
     return total_loss, time.perf_counter() - start_epoch
 

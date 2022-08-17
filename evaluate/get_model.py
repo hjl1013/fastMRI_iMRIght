@@ -28,6 +28,7 @@ def get_model(model_name: str, model_path: Path):
         "test_unet": "/root/result/test_unet/checkpoints/best_model_ep2_train0.03348_val0.001803.pt",
         "Unet_finetune": "/root/result/Unet_finetune/checkpoints/model.pt",
         "ResUnet_with_stacking": "/root/result/ResUnet_with_stacking/checkpoints/model.pt",
+        "test_varnet": "/root/result/test_varnet/checkpoints/best_model_ep40_train0.03726_val0.02616.pt"
     }
 
     if model_path is not None:
@@ -48,7 +49,7 @@ def get_model(model_name: str, model_path: Path):
         pretrained = torch.load(model_path)
         model.load_state_dict(pretrained)
 
-    elif model_name == 'VarNet_SNU':
+    elif model_name == 'VarNet_SNU' or model_name == 'test_varnet':
         model = VarNet(num_cascades=3)
 
         pretrained = torch.load(model_path)

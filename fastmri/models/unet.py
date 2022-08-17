@@ -99,7 +99,7 @@ class Unet(nn.Module):
             if torch.sum(torch.tensor(padding)) != 0:
                 output = F.pad(output, padding, "reflect")
 
-            output = torch.cat([output, downsample_layer], dim=0)
+            output = torch.cat([output, downsample_layer], dim=1)
             output = conv(output)
 
         return output
