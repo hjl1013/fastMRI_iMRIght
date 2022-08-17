@@ -27,6 +27,7 @@ def parse(parser=None):
     parser.add_argument('-bu', '--batch-update', type=int, default=64, help='num of batch to accumulate grad')
     parser.add_argument('-e', '--num-epochs', type=int, default=40, help='Number of epochs')
     parser.add_argument('-l', '--lr', type=float, default=1e-4, required=True, help='Learning rate')
+    parser.add_argument('-f', '--factor', type=float, default=0.1, help='factor for ReduceLROnPlateau')
     parser.add_argument('-w', '--weight-decay', type=float, default=0, help='weight decay')
     parser.add_argument('-r', '--report-interval', type=int, default=500, help='Report interval')
     parser.add_argument('-n', '--net-name', type=Path, default='Unet_finetune', required=True, help='Name of network')
