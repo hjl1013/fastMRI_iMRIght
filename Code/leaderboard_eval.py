@@ -4,6 +4,9 @@ import h5py
 import random
 import glob
 import os
+import sys
+sys.path.append('/root/fastMRI_hjl')
+
 import torch
 from utils.common.loss_function import SSIMLoss
 import torch.nn.functional as F
