@@ -2,8 +2,10 @@ import torch
 from random import random
 # import albumentations as A
 import matplotlib.pyplot as plt
+import cv2
 
 from fastmri.data.transforms import *
+
 
 def to_tensor(data):
     """
@@ -16,10 +18,12 @@ def to_tensor(data):
     """
     return torch.from_numpy(data)
 
+
 def minmaxScale(data):
     min = torch.min(data)
     max = torch.max(data)
-    return (data-min)/(max-min), min, max
+    return (data - min) / (max - min), min, max
+
 
 def random_augment(input, target):
     r_flip = random()
@@ -60,28 +64,36 @@ def random_augment(input, target):
 
     return input, target
 
+
 class VarnetDataTransform:
-    def __init__(self, isforward, max_key):
-        self.isforward = isforward
+    def __init__(self, max_key):
         self.max_key = max_key
+
     def __call__(self, mask, input, target, attrs, fname, slice):
-        if not self.isforward:
-            target = to_tensor(target)
-            maximum = attrs[self.max_key]
-        else:
-            target = -1
-            maximum = -1
-        
+        maximum = np.max(target)
+
         kspace = to_tensor(input * mask)
         kspace = torch.stack((kspace.real, kspace.imag), dim=-1)
         mask = torch.from_numpy(mask.reshape(1, 1, kspace.shape[-2], 1).astype(np.float32)).byte()
 
-        return mask, kspace, target, maximum, fname, slice
+        img_mask = np.zeros(target.shape)
+        img_mask[target > 5e-5] = 1
+        kernel = np.ones((3, 3), np.uint8)
+        img_mask = cv2.erode(img_mask, kernel, iterations=1)
+        img_mask = cv2.dilate(img_mask, kernel, iterations=15)
+        img_mask = cv2.erode(img_mask, kernel, iterations=14)
+
+        target = to_tensor(target)
+        img_mask = (to_tensor(img_mask)).type(torch.FloatTensor)
+
+        return mask, kspace, target, maximum, fname, slice, img_mask
+
 
 class UnetDataTransform:
     def __init__(self, isforward, max_key):
         self.isforward = isforward
         self.max_key = max_key
+
     def __call__(self, input, target, attrs, fname, slice):
         input = to_tensor(input).type(torch.FloatTensor)
         input = input[None, ...]
@@ -100,12 +112,13 @@ class UnetDataTransform:
 
         return input, target, mean, std, fname, slice, maximum
 
+
 class MultichannelDataTransform:
     def __init__(self, max_key, use_augment):
         self.max_key = max_key
         self.use_augment = use_augment
-    def __call__(self, input, input_num, target, attrs, fname, slice):
 
+    def __call__(self, input, input_num, target, attrs, fname, slice):
         input = to_tensor(input).type(torch.FloatTensor)
         input = input[-input_num:]
         # normalize input
@@ -114,13 +127,24 @@ class MultichannelDataTransform:
 
         maximum = np.max(target)
 
+        img_mask = np.zeros(target.shape)
+        img_mask[target > 5e-5] = 1
+        kernel = np.ones((3, 3), np.uint8)
+        img_mask = cv2.erode(img_mask, kernel, iterations=1)
+        img_mask = cv2.dilate(img_mask, kernel, iterations=15)
+        img_mask = cv2.erode(img_mask, kernel, iterations=14)
+
         target = to_tensor(target)
+        img_mask = (to_tensor(img_mask)).type(torch.FloatTensor)
+
         target = target[None, ...]
+        img_mask = img_mask[None, ...]
 
         if self.use_augment:
             input, target = random_augment(input, target)
 
-        return input, target, mean, std, fname, slice, maximum
+        return input, target, mean, std, fname, slice, maximum, img_mask
+
 
 class ADLDataTransform:
     def __init__(self, max_key, use_augment):
@@ -128,7 +152,6 @@ class ADLDataTransform:
         self.use_augment = use_augment
 
     def __call__(self, input, input_num, target, attrs, fname, slice):
-
         input = to_tensor(input).type(torch.FloatTensor)
         input = input[-input_num:]
 
@@ -137,20 +160,20 @@ class ADLDataTransform:
 
         target = to_tensor(target)
         maximum = torch.max(target)
-        #maximum = attrs[self.max_key]
+        # maximum = attrs[self.max_key]
         target = target[None, ...]
-        target = (target-min)/(max-min)
+        target = (target - min) / (max - min)
 
         if self.use_augment:
             input, target = random_augment(input, target)
 
         data = dict()
-        data['x'] = target # gt
-        data['y'] = input # data with noise
+        data['x'] = target  # gt
+        data['y'] = input  # data with noise
         data['filename'] = fname
         data['min'] = min
         data['max'] = max
-        data['maximum'] = maximum # max of target, use for SSIM loss
+        data['maximum'] = maximum  # max of target, use for SSIM loss
         data['slice'] = slice
 
         return data

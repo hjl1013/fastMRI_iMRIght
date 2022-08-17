@@ -68,13 +68,18 @@ def varnet_train_epoch(args, epoch, model, data_loader, optimizer, loss_type):
     pbar = tqdm(data_loader, desc=f"Training epoch{epoch}", bar_format='{l_bar}{bar:80}{r_bar}')
 
     for iter, data in enumerate(pbar):
-        mask, kspace, target, maximum, _, _ = data
+        mask, kspace, target, maximum, _, _, img_mask = data
         mask = mask.cuda(non_blocking=True)
         kspace = kspace.cuda(non_blocking=True)
         target = target.cuda(non_blocking=True)
         maximum = maximum.cuda(non_blocking=True)
+        img_mask = img_mask.cuda(non_blocking=True)
 
         output = model(kspace, mask)
+
+        output = output * img_mask
+        target = target * img_mask
+
         loss = loss_type(output, target, maximum)  # default SSIM
         optimizer.zero_grad()
         loss.backward()
@@ -107,11 +112,17 @@ def varnet_validate(args, model, data_loader, loss_type):
 
     with torch.no_grad():
         for iter, data in enumerate(pbar):
-            mask, kspace, target, maximum, fnames, slices = data
+            mask, kspace, target, maximum, fnames, slices, img_mask = data
             kspace = kspace.cuda(non_blocking=True)
             mask = mask.cuda(non_blocking=True)
             maximum = maximum.cuda(non_blocking=True)
+            img_mask = img_mask.cuda(non_blocking=True)
+            target = target.cuda(non_blocking=True)
+
             output = model(kspace, mask)
+
+            output = output * img_mask
+            target = target * img_mask
 
             loss = loss_type(output, target, maximum)
             total_val_loss += loss.item()
@@ -120,7 +131,7 @@ def varnet_validate(args, model, data_loader, loss_type):
 
             for i in range(output.shape[0]):
                 reconstructions[fnames[i]][int(slices[i])] = output[i].cpu().numpy()
-                targets[fnames[i]][int(slices[i])] = target[i].numpy()
+                targets[fnames[i]][int(slices[i])] = target[i].cpu().numpy()
 
     for fname in reconstructions:
         reconstructions[fname] = np.stack(
@@ -174,7 +185,6 @@ def varnet_train(args):
         print(f"learning rate: {optimizer.param_groups[0]['lr']}")
 
         train_loss, train_time = varnet_train_epoch(args, epoch, model, train_loader, optimizer, loss_type)
-        scheduler.step()
         val_loss, reconstructions, targets, inputs, val_time = varnet_validate(args, model, val_loader, loss_type)
 
         train_loss = torch.tensor(train_loss).cuda(non_blocking=True)
@@ -197,6 +207,8 @@ def varnet_train(args):
                 f'ForwardTime = {time.perf_counter() - start:.4f}s',
             )
 
+        scheduler.step(val_loss)
+
 ##################### IMtoIM ########################
 
 def imtoim_validate(args, model, data_loader, loss_type):
@@ -212,20 +224,24 @@ def imtoim_validate(args, model, data_loader, loss_type):
 
     with torch.no_grad():
         for iter, data in enumerate(pbar):
-            input, target, mean, std, fnames, slices, maximum = data
+            input, target, mean, std, fnames, slices, maximum, img_mask = data
             input = input.cuda(non_blocking=True)
             target = target.cuda(non_blocking=True)
             mean = mean.cuda(non_blocking=True)
             std = std.cuda(non_blocking=True)
             maximum = maximum.cuda(non_blocking=True)
+            img_mask = img_mask.cuda(non_blocking=True)
             output = model(input)
 
             std = std[:, None, None, None]
             mean = mean[:, None, None, None]
             output = output * std + mean
 
+            output = output * img_mask
+            target = target * img_mask
+
             loss = loss_type(output, target, maximum)
-            total_val_loss = loss.item()
+            total_val_loss += loss.item()
 
             pbar.set_postfix({"Validation loss": f"{loss.item():.4f}"})
 
@@ -256,17 +272,21 @@ def imtoim_train_epoch(args, epoch, model, data_loader, optimizer, scaler, iters
 
     for iter, data in enumerate(pbar):
         with autocast(enabled=False):
-            input, target, mean, std, _, _, maximum = data
+            input, target, mean, std, _, _, maximum, mask = data
             input = input.cuda(non_blocking=True)
             target = target.cuda(non_blocking=True)
             maximum = maximum.cuda(non_blocking=True)
             mean = mean.cuda(non_blocking=True)
             std = std.cuda(non_blocking=True)
+            mask = mask.cuda(non_blocking=True)
+
             std = std[:, None, None, None]
             mean = mean[:, None, None, None]
             output = model(input)
-
             output = output * std + mean
+
+            output = output * mask
+            target = target * mask
 
             loss = loss_type(output, target, maximum)  # default SSIM loss
 
@@ -280,6 +300,10 @@ def imtoim_train_epoch(args, epoch, model, data_loader, optimizer, scaler, iters
 
         if (iter + 1) % iters_to_accumulate == 0:
             # may unscale_ here if desired (e.g., to allow clipping unscaled gradients)
+            if args.clip == True:
+                scaler.unscale_(optimizer)
+                # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=args.max_norm)
 
             scaler.step(optimizer)
             scaler.update()
