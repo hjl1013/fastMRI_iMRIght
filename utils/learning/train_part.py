@@ -237,10 +237,10 @@ def imtoim_validate(args, model, data_loader, loss_type):
             mean = mean[:, None, None, None]
             output = output * std + mean
 
-            output = output * img_mask
+            output_calculate = output * img_mask
             target = target * img_mask
 
-            loss = loss_type(output, target, maximum)
+            loss = loss_type(output_calculate, target, maximum)
             total_val_loss += loss.item()
 
             pbar.set_postfix({"Validation loss": f"{loss.item():.4f}"})
@@ -386,7 +386,7 @@ def imtoim_train(args):
             start_epoch = checkpoint['epoch']
             optimizer.load_state_dict(checkpoint['optimizer'])
             scheduler.load_state_dict(checkpoint['scheduler'])
-            # args = checkpoint['args']
+            args = checkpoint['args']
 
     train_loader = create_data_loaders(data_path=args.data_path_train, args=args, use_augment=True)
     val_loader = create_data_loaders(data_path=args.data_path_val, args=args, use_augment=False)
