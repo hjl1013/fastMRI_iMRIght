@@ -148,7 +148,7 @@ def create_data_loaders(data_path, args, use_augment=False, isforward=False):
     if args.model_type == 'Varnet':
         data_storage = kspace_SliceData(
             root=data_path,
-            transform=VarnetDataTransform(isforward, max_key_),
+            transform=VarnetDataTransform(max_key_),
             input_key=args.input_key,
             target_key=target_key_,
             forward=isforward,

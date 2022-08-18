@@ -2,6 +2,7 @@ import torch
 from random import random
 # import albumentations as A
 import matplotlib.pyplot as plt
+import cv2
 
 from fastmri.data.transforms import *
 
@@ -61,22 +62,26 @@ def random_augment(input, target):
     return input, target
 
 class VarnetDataTransform:
-    def __init__(self, isforward, max_key):
-        self.isforward = isforward
+    def __init__(self, max_key):
         self.max_key = max_key
     def __call__(self, mask, input, target, attrs, fname, slice):
-        if not self.isforward:
-            target = to_tensor(target)
-            maximum = attrs[self.max_key]
-        else:
-            target = -1
-            maximum = -1
+        maximum = np.max(target)
         
         kspace = to_tensor(input * mask)
         kspace = torch.stack((kspace.real, kspace.imag), dim=-1)
         mask = torch.from_numpy(mask.reshape(1, 1, kspace.shape[-2], 1).astype(np.float32)).byte()
 
-        return mask, kspace, target, maximum, fname, slice
+        img_mask = np.zeros(target.shape)
+        img_mask[target > 5e-5] = 1
+        kernel = np.ones((3, 3), np.uint8)
+        img_mask = cv2.erode(img_mask, kernel, iterations=1)
+        img_mask = cv2.dilate(img_mask, kernel, iterations=15)
+        img_mask = cv2.erode(img_mask, kernel, iterations=14)
+
+        target = to_tensor(target)
+        img_mask = (to_tensor(img_mask)).type(torch.FloatTensor)
+
+        return mask, kspace, target, maximum, fname, slice, img_mask
 
 class UnetDataTransform:
     def __init__(self, isforward, max_key):
@@ -114,13 +119,23 @@ class MultichannelDataTransform:
 
         maximum = np.max(target)
 
+        img_mask = np.zeros(target.shape)
+        img_mask[target > 5e-5] = 1
+        kernel = np.ones((3, 3), np.uint8)
+        img_mask = cv2.erode(img_mask, kernel, iterations=1)
+        img_mask = cv2.dilate(img_mask, kernel, iterations=15)
+        img_mask = cv2.erode(img_mask, kernel, iterations=14)
+
         target = to_tensor(target)
+        img_mask = (to_tensor(img_mask)).type(torch.FloatTensor)
+
         target = target[None, ...]
+        img_mask = img_mask[None, ...]
 
         if self.use_augment:
             input, target = random_augment(input, target)
 
-        return input, target, mean, std, fname, slice, maximum
+        return input, target, mean, std, fname, slice, maximum, img_mask
 
 class ADLDataTransform:
     def __init__(self, max_key, use_augment):
