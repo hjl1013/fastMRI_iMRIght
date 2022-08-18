@@ -381,11 +381,12 @@ def imtoim_train(args):
         model.load_state_dict(checkpoint['model'])
 
         if args.continue_training:
+            print('loading checkpoint datas')
             best_val_ssim = checkpoint['best_val_ssim']
             start_epoch = checkpoint['epoch']
             optimizer.load_state_dict(checkpoint['optimizer'])
             scheduler.load_state_dict(checkpoint['scheduler'])
-            args = checkpoint['args']
+            # args = checkpoint['args']
 
     train_loader = create_data_loaders(data_path=args.data_path_train, args=args, use_augment=True)
     val_loader = create_data_loaders(data_path=args.data_path_val, args=args, use_augment=False)
