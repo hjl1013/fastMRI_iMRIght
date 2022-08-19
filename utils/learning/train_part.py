@@ -11,7 +11,7 @@ import copy
 import matplotlib.pyplot as plt
 
 from collections import defaultdict
-from utils.data.load_data import create_data_loaders, create_data_loaders_for_imtoim_cutmix
+from utils.data.load_data import create_data_loaders, create_data_loaders_for_imtoim_cutmix, create_data_loaders_for_imtoim_cutmix_validation
 from utils.common.utils import save_reconstructions, ssim_loss
 from utils.common.loss_function import SSIMLoss
 from utils.model.varnet import VarNet
@@ -430,7 +430,7 @@ def imtoim_train(args):
 def imtoim_cutmix_train_epoch(args, epoch, model, data_loader, optimizer, scaler, iters_to_accumulate, loss_type):
     model.train()
     start_epoch = start_iter = time.perf_counter()
-    len_loader = len(data_loader)
+    len_loader = 0
     total_loss = 0.
 
     pbar = tqdm(data_loader, desc=f"Training epoch{epoch}", bar_format='{l_bar}{bar:80}{r_bar}')
@@ -444,7 +444,7 @@ def imtoim_cutmix_train_epoch(args, epoch, model, data_loader, optimizer, scaler
             img_mask_batch=img_mask_batch,
         )
 
-        for i in range(0, args.batch_size, args.batch_size_for_cutmix):
+        for i in range(0, len(mixup_input), args.batch_size_for_cutmix):
             with autocast(enabled=False):
                 input = mixup_input[i: i + args.batch_size_for_cutmix]
                 target = mixup_target[i: i + args.batch_size_for_cutmix]
@@ -477,6 +477,7 @@ def imtoim_cutmix_train_epoch(args, epoch, model, data_loader, optimizer, scaler
                 pbar.set_postfix({"loss": f"{loss.item():.4f}"}, refresh=True)
 
                 total_loss += loss.item()
+                len_loader += 1
                 loss = loss / iters_to_accumulate
 
             # Accumulates scaled gradients.
@@ -624,7 +625,8 @@ def imtoim_cutmix_train(args):
             # args = checkpoint['args']
 
     train_loader = create_data_loaders_for_imtoim_cutmix(data_path=args.data_path_train, args=args, use_augment=True)
-    val_loader = create_data_loaders(data_path=args.data_path_val, args=args, use_augment=False)
+    val_loader = create_data_loaders_for_imtoim_cutmix_validation(data_path=args.data_path_val, args=args, use_augment=False)
+    test_loader = create_data_loaders_for_imtoim_cutmix_validation(data_path=args.data_path_test, args=args, use_augment=False)
     iters_to_accumulate = args.batch_update / args.batch_size
 
     for epoch in range(start_epoch, args.num_epochs):
@@ -635,6 +637,8 @@ def imtoim_cutmix_train(args):
             imtoim_cutmix_train_epoch(args, epoch, model, train_loader, optimizer, scaler, iters_to_accumulate, loss_type)
         val_loss, reconstructions, targets, inputs, val_time = \
             imtoim_cutmix_validate(args, model, val_loader, loss_type)
+        test_loss, reconstructions_test, targets_test, inputs_test, test_time = \
+            imtoim_cutmix_validate(args, model, test_loader, loss_type)
 
         train_loss = torch.tensor(train_loss).cuda(non_blocking=True)
         val_loss = torch.tensor(val_loss).cuda(non_blocking=True)
@@ -645,13 +649,14 @@ def imtoim_cutmix_train(args):
         save_model(args, args.exp_dir, epoch + 1, model, optimizer, scheduler, train_loss, best_val_ssim, is_new_best)
         print(
             f'Epoch = [{epoch:4d}/{args.num_epochs:4d}] TrainLoss = {train_loss:.4g} '
-            f'ValLoss = {val_loss:.4g} TrainTime = {train_time:.4f}s ValTime = {val_time:.4f}s',
+            f'ValLoss = {val_loss:.4g} TestLoss = {test_loss:.4g} TrainTime = {train_time:.4f}s ValTime = {val_time:.4f}s',
         )
 
         if is_new_best:
             print("@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@NewRecord@@@@@@@@@@@@@@@@@@@@@@@@@@@@")
             start = time.perf_counter()
             save_reconstructions(reconstructions, args.val_dir, targets=targets, inputs=inputs)
+            save_reconstructions(reconstructions_test, args.test_dir, targets=targets_test, inputs=inputs_test)
             print(
                 f'ForwardTime = {time.perf_counter() - start:.4f}s',
             )

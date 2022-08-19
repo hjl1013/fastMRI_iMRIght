@@ -207,3 +207,27 @@ def create_data_loaders_for_imtoim_cutmix(data_path, args, use_augment=False, is
     )
 
     return data_loader
+
+
+def create_data_loaders_for_imtoim_cutmix_validation(data_path, args, use_augment=False, isforward=False):
+    if isforward == False:
+        max_key_ = args.max_key
+        target_key_ = args.target_key
+    else:
+        max_key_ = -1
+        target_key_ = -1
+
+    data_storage = MultichannelSliceData(
+        root=data_path,
+        transform=MultichannelDataTransform(max_key=max_key_, use_augment=use_augment),
+        input_key=args.input_key,
+        input_num=args.input_num,
+        target_key=target_key_,
+    )
+
+    data_loader = DataLoader(
+        dataset=data_storage,
+        batch_size=2
+    )
+
+    return data_loader

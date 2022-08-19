@@ -65,6 +65,7 @@ if __name__ == '__main__':
     args = parse()
     args.exp_dir = '/root/result' / args.net_name / 'checkpoints'
     args.val_dir = '/root/result' / args.net_name / 'reconstructions_val'
+    args.test_dir = '/root/result' / args.net_name / 'reconstructions_test'
     args.main_dir = '/root/result' / args.net_name / __file__
 
     args.exp_dir.mkdir(parents=True, exist_ok=True)
