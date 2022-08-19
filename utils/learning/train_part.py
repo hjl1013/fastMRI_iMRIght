@@ -392,6 +392,7 @@ def imtoim_train(args):
 
     train_loader = create_data_loaders(data_path=args.data_path_train, args=args, use_augment=True)
     val_loader = create_data_loaders(data_path=args.data_path_val, args=args, use_augment=False)
+    test_loader = create_data_loaders(data_path=args.data_path_test, args=args, use_augment=False)
     iters_to_accumulate = args.batch_update / args.batch_size
 
     for epoch in range(start_epoch, args.num_epochs):
@@ -402,6 +403,8 @@ def imtoim_train(args):
             imtoim_train_epoch(args, epoch, model, train_loader, optimizer, scaler, iters_to_accumulate, loss_type)
         val_loss, reconstructions, targets, inputs, val_time = \
             imtoim_validate(args, model, val_loader, loss_type)
+        test_loss, reconstructions_test, targets_test, inputs_test, test_time = \
+            imtoim_cutmix_validate(args, model, test_loader, loss_type)
 
         train_loss = torch.tensor(train_loss).cuda(non_blocking=True)
         val_loss = torch.tensor(val_loss).cuda(non_blocking=True)
@@ -412,7 +415,7 @@ def imtoim_train(args):
         save_model(args, args.exp_dir, epoch + 1, model, optimizer, scheduler, train_loss, best_val_ssim, is_new_best)
         print(
             f'Epoch = [{epoch:4d}/{args.num_epochs:4d}] TrainLoss = {train_loss:.4g} '
-            f'ValLoss = {val_loss:.4g} TrainTime = {train_time:.4f}s ValTime = {val_time:.4f}s',
+            f'ValLoss = {val_loss:.4g} TestLoss = {test_loss:.4g} TrainTime = {train_time:.4f}s ValTime = {val_time:.4f}s',
         )
 
         if is_new_best:
@@ -483,16 +486,14 @@ def imtoim_cutmix_train_epoch(args, epoch, model, data_loader, optimizer, scaler
             # Accumulates scaled gradients.
             scaler.scale(loss).backward()
 
-        if (iter + 1) % iters_to_accumulate == 0:
-            # may unscale_ here if desired (e.g., to allow clipping unscaled gradients)
-            if args.clip == True:
-                scaler.unscale_(optimizer)
-                # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
-                torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=args.max_norm)
-
-            scaler.step(optimizer)
-            scaler.update()
-            optimizer.zero_grad()
+        # may unscale_ here if desired (e.g., to allow clipping unscaled gradients)
+        if args.clip == True:
+            scaler.unscale_(optimizer)
+            # Since the gradients of optimizer's assigned params are unscaled, clips as usual:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=args.max_norm)
+        scaler.step(optimizer)
+        scaler.update()
+        optimizer.zero_grad()
 
         # print('shape: output_{}, target_{}, std_{}, mean_{}'.format(output.shape, target.shape, std.shape, mean.shape))
 
@@ -627,7 +628,7 @@ def imtoim_cutmix_train(args):
     train_loader = create_data_loaders_for_imtoim_cutmix(data_path=args.data_path_train, args=args, use_augment=True)
     val_loader = create_data_loaders_for_imtoim_cutmix_validation(data_path=args.data_path_val, args=args, use_augment=False)
     test_loader = create_data_loaders_for_imtoim_cutmix_validation(data_path=args.data_path_test, args=args, use_augment=False)
-    iters_to_accumulate = args.batch_update / args.batch_size
+    iters_to_accumulate = args.batch_size / args.batch_size_for_cutmix
 
     for epoch in range(start_epoch, args.num_epochs):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
