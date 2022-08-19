@@ -40,15 +40,16 @@ def forward_file_multichannel(args, model, device, image_fpath):
             hf['VarNet_recon'],
             hf['XPDNet_recon']
         ], axis=1)
+        target_trash = np.array(hf['image_label'])[0]
 
     transform = MultichannelDataTransform(max_key='max', use_augment=False)
 
     output = []
     for image in images:
-        image_input, _, _, mean, std, _, _ = transform(
+        image_input, _, mean, std, _, _, _, _ = transform(
             input=image,
             input_num=args.input_num,
-            target=None,
+            target=target_trash,
             attrs=None,
             fname=None,
             slice=None,
@@ -81,7 +82,7 @@ def unet_eval(args):
 
     if args.model_type == 'Unet':
         forward_file = forward_file_unet
-    elif args.model_type in ['ResUnet', 'MLPMixer']:
+    elif args.model_type in ['ResUnet', 'MLPMixer', 'NAFNet']:
         forward_file = forward_file_multichannel
 
     with torch.no_grad():
@@ -116,14 +117,14 @@ if __name__ == '__main__':
         "--model_name",
         default="Unet_finetune",
         type=str,
-        choices=['Unet_finetune', 'ResUnet_with_stacking', 'test_mlpmixer'],
+        choices=['Unet_finetune', 'ResUnet_with_stacking', 'test_mlpmixer', 'NAFNet_stacking_lr0.001'],
         help="Name of model"
     )
     parser.add_argument(
         "--model_type",
         default="Unet",
         type=str,
-        choices=['Unet', 'ResUnet', 'MLPMixer'],
+        choices=['Unet', 'ResUnet', 'MLPMixer', 'NAFNet'],
         help="Type of model"
     )
     parser.add_argument(
