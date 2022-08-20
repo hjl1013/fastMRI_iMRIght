@@ -28,7 +28,7 @@ def parse(parser=None):
     parser.add_argument('-cl', '--clip', type=str2bool, default=False, help='whether to use gradient clipping')
     parser.add_argument('-mn', '--max-norm', type=float, default=0.01, help='max norm for gradient clipping')
     parser.add_argument('-e', '--num-epochs', type=int, default=40, help='Number of epochs')
-    parser.add_argument('-l', '--lr', type=float, default=1e-4, required=True, help='Learning rate')
+    parser.add_argument('-l', '--lr', type=float, default=0.001, help='Learning rate')
     parser.add_argument('-f', '--factor', type=float, default=0.1, help='factor for ReduceLROnPlateau')
     parser.add_argument('-w', '--weight-decay', type=float, default=0, help='weight decay')
     parser.add_argument('-d', '--dropout', type=float, default=0., help='dropout rate')

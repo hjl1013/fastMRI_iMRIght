@@ -32,7 +32,8 @@ def get_model(model_name: str, model_path: Path):
         "ResUnet_with_stacking": "/root/result/ResUnet_with_stacking/checkpoints/model.pt",
         "test_varnet": "/root/result/test_varnet/checkpoints/best_model_ep40_train0.03726_val0.02616.pt",
         "test_mlpmixer": "/root/result/test_mlpmixer/checkpoints/model.pt",
-        "NAFNet_stacking_lr0.001": "/root/models/NAFNet_ours/best_model_ep40_train0.0124_val0.01378.pt"
+        "NAFNet_stacking_lr0.001": "/root/models/NAFNet_ours/best_model_ep40_train0.0124_val0.01378.pt",
+        "NAFNet_final": None
     }
 
     if model_path is not None:
@@ -104,5 +105,19 @@ def get_model(model_name: str, model_path: Path):
 
         pretrained = torch.load(model_path)
         model.load_state_dict(pretrained['model'])
+
+    elif model_name == 'NAFNet_final':
+        img_channel = 4
+        width = 32
+
+        enc_blks = [2, 2, 4, 8]
+        middle_blk_num = 12
+        dec_blks = [2, 2, 2, 2]
+
+        # enc_blks = [1, 1, 1, 28]
+        # middle_blk_num = 1
+        # dec_blks = [1, 1, 1, 1]
+        model = NAFNet(img_channel=img_channel, width=width, middle_blk_num=middle_blk_num,
+                       enc_blk_nums=enc_blks, dec_blk_nums=dec_blks, dropout=0)
 
     return model
