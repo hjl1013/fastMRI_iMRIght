@@ -360,7 +360,7 @@ def imtoim_train(args):
         #middle_blk_num = 1
         #dec_blks = [1, 1, 1, 1]
         model = NAFNet(img_channel=img_channel, width=width, middle_blk_num=middle_blk_num,
-                       enc_blk_nums=enc_blks, dec_blk_nums=dec_blks)
+                       enc_blk_nums=enc_blks, dec_blk_nums=dec_blks, dropout=args.dropout)
     summary(model, input_size=(1, args.input_num, 384, 384))
     model = model.to(device=device)
     loss_type = SSIMLoss().to(device=device)
@@ -605,7 +605,7 @@ def imtoim_mixup_train(args):
         #middle_blk_num = 1
         #dec_blks = [1, 1, 1, 1]
         model = NAFNet(img_channel=img_channel, width=width, middle_blk_num=middle_blk_num,
-                       enc_blk_nums=enc_blks, dec_blk_nums=dec_blks)
+                       enc_blk_nums=enc_blks, dec_blk_nums=dec_blks, dropout=args.dropout)
     summary(model, input_size=(1, args.input_num, 384, 384))
     model = model.to(device=device)
     loss_type = SSIMLoss().to(device=device)

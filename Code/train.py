@@ -3,7 +3,7 @@ import os, sys
 
 if os.getcwd() + '/utils/model/' not in sys.path:
     sys.path.insert(1, os.getcwd() + '/utils/model/')
-sys.path.append('/root/fastMRI_hjl')
+sys.path.append('/root/ksunw')
 
 from utils.learning.train_part import varnet_train, imtoim_train
 from pathlib import Path
@@ -31,6 +31,7 @@ def parse(parser=None):
     parser.add_argument('-l', '--lr', type=float, default=1e-4, required=True, help='Learning rate')
     parser.add_argument('-f', '--factor', type=float, default=0.1, help='factor for ReduceLROnPlateau')
     parser.add_argument('-w', '--weight-decay', type=float, default=0, help='weight decay')
+    parser.add_argument('-d', '--dropout', type=float, default=0., help='dropout rate')
     parser.add_argument('-r', '--report-interval', type=int, default=500, help='Report interval')
     parser.add_argument('-n', '--net-name', type=Path, default='Unet_finetune', required=True, help='Name of network')
     parser.add_argument('-i', '--input-type', type=str, default='image', help='Type of input', choices=['image', 'kspace'])
