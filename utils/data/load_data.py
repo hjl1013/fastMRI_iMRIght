@@ -2,7 +2,7 @@ import h5py
 import random
 
 from utils.data.transforms import VarnetDataTransform, UnetDataTransform, MultichannelDataTransform, ADLDataTransform,\
-    MultichannelDataTransform_with_cutmix
+    MultichannelDataTransform_with_mixup
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
 import numpy as np
@@ -185,7 +185,7 @@ def create_data_loaders(data_path, args, use_augment=False, isforward=False):
     )
     return data_loader
 
-def create_data_loaders_for_imtoim_cutmix(data_path, args, use_augment=False, isforward=False):
+def create_data_loaders_for_imtoim_mixup(data_path, args, use_augment=False, isforward=False):
     if isforward == False:
         max_key_ = args.max_key
         target_key_ = args.target_key
@@ -195,7 +195,7 @@ def create_data_loaders_for_imtoim_cutmix(data_path, args, use_augment=False, is
 
     data_storage = MultichannelSliceData(
         root=data_path,
-        transform=MultichannelDataTransform_with_cutmix(max_key=max_key_, use_augment=use_augment),
+        transform=MultichannelDataTransform_with_mixup(max_key=max_key_, use_augment=use_augment),
         input_key=args.input_key,
         input_num=args.input_num,
         target_key=target_key_,
@@ -209,7 +209,7 @@ def create_data_loaders_for_imtoim_cutmix(data_path, args, use_augment=False, is
     return data_loader
 
 
-def create_data_loaders_for_imtoim_cutmix_validation(data_path, args, use_augment=False, isforward=False):
+def create_data_loaders_for_imtoim_mixup_validation(data_path, args, use_augment=False, isforward=False):
     if isforward == False:
         max_key_ = args.max_key
         target_key_ = args.target_key

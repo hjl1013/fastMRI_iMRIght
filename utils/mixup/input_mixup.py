@@ -5,9 +5,11 @@ def input_mixup(input_batch, target_batch, img_mask_batch, alpha=1.0):
     lam = np.random.beta(alpha, alpha)
     permute = torch.randperm(input_batch.shape[0])
 
+    target_batch = target_batch * img_mask_batch
+
     mixup_input = lam * input_batch + (1 - lam) * input_batch[permute]
     mixup_target = lam * target_batch + (1 - lam) * target_batch[permute]
-    mixup_img_mask = img_mask_batch | img_mask_batch[permute]
+    mixup_img_mask = (img_mask_batch.type(torch.IntTensor) | img_mask_batch[permute].type(torch.IntTensor)).type(torch.FloatTensor)
 
     return mixup_input, mixup_target, mixup_img_mask, lam
 

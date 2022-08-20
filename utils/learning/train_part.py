@@ -11,7 +11,7 @@ import copy
 import matplotlib.pyplot as plt
 
 from collections import defaultdict
-from utils.data.load_data import create_data_loaders, create_data_loaders_for_imtoim_cutmix, create_data_loaders_for_imtoim_cutmix_validation
+from utils.data.load_data import create_data_loaders, create_data_loaders_for_imtoim_mixup, create_data_loaders_for_imtoim_mixup_validation
 from utils.common.utils import save_reconstructions, ssim_loss
 from utils.common.loss_function import SSIMLoss
 from utils.model.varnet import VarNet
@@ -476,6 +476,16 @@ def imtoim_mixup_train_epoch(args, epoch, model, data_loader, optimizer, scaler,
                 output = output * img_mask
                 target = target * img_mask
 
+                # if i == 0:
+                #     plt.figure()
+                #     plt.subplot(221)
+                #     plt.imshow(target[0][0].cpu())
+                #     plt.subplot(222)
+                #     plt.imshow(output[0][0].cpu().detach().numpy())
+                #     plt.subplot(223)
+                #     plt.imshow(img_mask[0][0].cpu())
+                #     plt.show()
+
                 loss = loss_type(output, target, maximum)  # default SSIM loss
 
                 pbar.set_postfix({"loss": f"{loss.item():.4f}"}, refresh=True)
@@ -631,9 +641,9 @@ def imtoim_mixup_train(args):
             scheduler.load_state_dict(checkpoint['scheduler'])
             # args = checkpoint['args']
 
-    train_loader = create_data_loaders_for_imtoim_cutmix(data_path=args.data_path_train, args=args, use_augment=True)
-    val_loader = create_data_loaders_for_imtoim_cutmix_validation(data_path=args.data_path_val, args=args, use_augment=False)
-    test_loader = create_data_loaders_for_imtoim_cutmix_validation(data_path=args.data_path_test, args=args, use_augment=False)
+    train_loader = create_data_loaders_for_imtoim_mixup(data_path=args.data_path_train, args=args, use_augment=True)
+    val_loader = create_data_loaders_for_imtoim_mixup_validation(data_path=args.data_path_val, args=args, use_augment=False)
+    test_loader = create_data_loaders_for_imtoim_mixup_validation(data_path=args.data_path_test, args=args, use_augment=False)
     iters_to_accumulate = args.batch_size / args.batch_size_for_mixup
 
     for epoch in range(start_epoch, args.num_epochs):

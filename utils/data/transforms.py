@@ -194,7 +194,7 @@ class ADLDataTransform:
 
         return data
 
-class MultichannelDataTransform_with_cutmix:
+class MultichannelDataTransform_with_mixup:
     def __init__(self, max_key, use_augment):
         self.max_key = max_key
         self.use_augment = use_augment

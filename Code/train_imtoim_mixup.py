@@ -5,7 +5,7 @@ if os.getcwd() + '/utils/model/' not in sys.path:
     sys.path.insert(1, os.getcwd() + '/utils/model/')
 sys.path.append('/root/fastMRI_hjl')
 
-from utils.learning.train_part import varnet_train, imtoim_cutmix_train
+from utils.learning.train_part import varnet_train, imtoim_mixup_train
 from pathlib import Path
 
 def str2bool(v):
@@ -24,7 +24,7 @@ def parse(parser=None):
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-g', '--GPU-NUM', type=int, default=0, help='GPU number to allocate')
     parser.add_argument('-b', '--batch-size', type=int, default=32, help='Batch size')
-    parser.add_argument('-bc', '--batch-size-for-mixup', type=int, default=2,
+    parser.add_argument('-bm', '--batch-size-for-mixup', type=int, default=2,
                         help='Batch size for mixup, this is the real batch size that goes through the model')
     parser.add_argument('-bu', '--batch-update', type=int, default=64, help='num of batch to accumulate grad')
     parser.add_argument('-cl', '--clip', type=str2bool, default=False, help='whether to use gradient clipping')
@@ -47,7 +47,7 @@ def parse(parser=None):
                         help='path of pretrained model to continue on training')
     parser.add_argument('-c', '--continue-training', type=str2bool, default=True, required=True,
                         help='whether to continue training or restart with the given model')
-    parser.add_argument('-cm', '--mixup_type', type=str, required=True, choices=['cutmix', 'input_mixup'],
+    parser.add_argument('-mt', '--mixup_type', type=str, required=True, choices=['cutmix', 'input_mixup'],
                         help='whether to use cutmix mixup strategy when training imtoim models')
 
     parser.add_argument('--cascade', type=int, default=3,
@@ -71,4 +71,4 @@ if __name__ == '__main__':
     args.exp_dir.mkdir(parents=True, exist_ok=True)
     args.val_dir.mkdir(parents=True, exist_ok=True)
 
-    imtoim_cutmix_train(args)
+    imtoim_mixup_train(args)
