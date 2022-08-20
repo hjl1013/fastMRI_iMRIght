@@ -404,7 +404,7 @@ def imtoim_train(args):
         val_loss, reconstructions, targets, inputs, val_time = \
             imtoim_validate(args, model, val_loader, loss_type)
         test_loss, reconstructions_test, targets_test, inputs_test, test_time = \
-            imtoim_cutmix_validate(args, model, test_loader, loss_type)
+            imtoim_validate(args, model, test_loader, loss_type)
 
         train_loss = torch.tensor(train_loss).cuda(non_blocking=True)
         val_loss = torch.tensor(val_loss).cuda(non_blocking=True)
