@@ -24,8 +24,8 @@ def parse(parser=None):
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-g', '--GPU-NUM', type=int, default=0, help='GPU number to allocate')
     parser.add_argument('-b', '--batch-size', type=int, default=32, help='Batch size')
-    parser.add_argument('-bc', '--batch-size-for-cutmix', type=int, default=2,
-                        help='Batch size for cutmix, this is the real batch size that goes through the model')
+    parser.add_argument('-bc', '--batch-size-for-mixup', type=int, default=2,
+                        help='Batch size for mixup, this is the real batch size that goes through the model')
     parser.add_argument('-bu', '--batch-update', type=int, default=64, help='num of batch to accumulate grad')
     parser.add_argument('-cl', '--clip', type=str2bool, default=False, help='whether to use gradient clipping')
     parser.add_argument('-mn', '--max-norm', type=float, default=0.01, help='max norm for gradient clipping')
@@ -47,7 +47,7 @@ def parse(parser=None):
                         help='path of pretrained model to continue on training')
     parser.add_argument('-c', '--continue-training', type=str2bool, default=True, required=True,
                         help='whether to continue training or restart with the given model')
-    parser.add_argument('-cm', '--use-cutmix', type=str2bool, required=True,
+    parser.add_argument('-cm', '--mixup_type', type=str, required=True, choices=['cutmix', 'input_mixup'],
                         help='whether to use cutmix mixup strategy when training imtoim models')
 
     parser.add_argument('--cascade', type=int, default=3,

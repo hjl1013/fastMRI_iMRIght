@@ -19,7 +19,7 @@ def rand_bbox(width, height, lam):
     return bbx1, bby1, bbx2, bby2
 
 
-def apply_cutmix_to_batch(input_batch, target_batch, img_mask_batch, alpha=1.0):
+def cutmix(input_batch, target_batch, img_mask_batch, alpha=1.0):
     batch_size, _, width, height = input_batch.shape
 
     lam = np.random.beta(alpha, alpha)
