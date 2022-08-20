@@ -42,7 +42,7 @@ def getXPDNet():
         tf.constant([[384, 384]]),  # shape
     ]
     model(inputs)
-    model.load_weights('/root/models/XPDNet_pretrained/model_weights.h5')
+    model.load_weights('/root/fastMRI/model/XPDNet.h5')
 
     return model
 

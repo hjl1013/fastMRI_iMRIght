@@ -3,15 +3,27 @@ SNU fastMRI competition (Team iMRIght)
 
 <hr>
 
-0. Following codes should be executed inside the folder 'Code'
+## Before Getting Started...
+
+1. Following codes should be executed inside the folder 'Code'
 ```bash
 cd Code  
 ```
-+ make sure to modify the path inside sys.path.append() to your project's location
-(else it will default to `'/root/fastMRI'`)
+
+2. Make sure to modify the path inside sys.path.append() to your project's location
+(it will default to `'/root/fastMRI'`)
 ```python
 sys.path.append('PATH_TO_YOUR_PROJECT')
 ```
+
+3. We added some library files and wrote evaluation codes of our own. 
++ `Code/*_eval.py`, `Code/get_model.py`: files for evalutation.
++ `fastmri`: latest version of fastmri library from facebook
++ `fastmri_recon`: library for XPDnet
++ `basicsr`: library for NAFNet
++ Any other files or directories under `fastMRI` are libraries of models other than VarNet, XPDNet, NAFNet. 
+We don't use these in evaluation below.
+
 ## Evaluation
 1. Run kspace models on test(leaderboard) data, make image files which will be used as input image 
 ```bash

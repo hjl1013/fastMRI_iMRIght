@@ -105,9 +105,9 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         "--model_name",
-        default="VarNet_pretrained",
+        default="VarNet_final",
         type=str,
-        choices=['VarNet_pretrained', 'VarNet_ours', 'VarNet_SNU', 'test_varnet'],
+        choices=['VarNet_pretrained', 'VarNet_ours', 'VarNet_SNU', 'test_varnet', 'VarNet_final'],
         help="Name of model"
     )
     parser.add_argument(

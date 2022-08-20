@@ -33,7 +33,8 @@ def get_model(model_name: str, model_path: Path):
         "test_varnet": "/root/result/test_varnet/checkpoints/best_model_ep40_train0.03726_val0.02616.pt",
         "test_mlpmixer": "/root/result/test_mlpmixer/checkpoints/model.pt",
         "NAFNet_stacking_lr0.001": "/root/models/NAFNet_ours/best_model_ep40_train0.0124_val0.01378.pt",
-        "NAFNet_final": None
+        "NAFNet_final": "/root/fastMRI/model/NAFNet.pt",
+        "VarNet_final": "/root/fastMRI/model/VarNet.pt"
     }
 
     if model_path is not None:
