@@ -167,7 +167,7 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         "--save_mode",
-        default="reconstruction",
+        default="imtoim_input",
         type=str,
         choices=["imtoim_input", "reconstruction"],
         help="Mode of saving outputs"

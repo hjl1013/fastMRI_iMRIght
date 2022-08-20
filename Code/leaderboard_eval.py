@@ -52,12 +52,12 @@ def forward(args):
     torch.cuda.set_device(device)
     
     leaderboard_data = glob.glob(os.path.join(args.leaderboard_data_path,'*.h5'))
-    # if len(leaderboard_data) != 58:
-    #     raise  NotImplementedError('Leaderboard Data Size Should Be 58')
-    #
-    # your_data = glob.glob(os.path.join(args.your_data_path,'*.h5'))
-    # if len(your_data) != 58:
-    #     raise  NotImplementedError('Your Data Size Should Be 58')
+    if len(leaderboard_data) != 58:
+        raise  NotImplementedError('Leaderboard Data Size Should Be 58')
+
+    your_data = glob.glob(os.path.join(args.your_data_path,'*.h5'))
+    if len(your_data) != 58:
+        raise  NotImplementedError('Your Data Size Should Be 58')
     
     ssim_total = 0
     idx = 0

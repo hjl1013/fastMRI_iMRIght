@@ -476,6 +476,8 @@ def imtoim_mixup_train_epoch(args, epoch, model, data_loader, optimizer, scaler,
                 output = output * img_mask
                 target = target * img_mask
 
+                print(input.shape)
+
                 # if i == 0:
                 #     plt.figure()
                 #     plt.subplot(221)

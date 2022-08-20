@@ -69,7 +69,7 @@ def save_file_recon(output, output_dir, fname):
         hf.create_dataset("reconstruction", data=output)
 
 
-def unet_eval(args):
+def imtoim_eval(args):
     device = torch.device(args.device)
 
     model = get_model(
@@ -115,14 +115,14 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         "--model_name",
-        default="Unet_finetune",
+        default="NAFNet_final",
         type=str,
-        choices=['Unet_finetune', 'ResUnet_with_stacking', 'test_mlpmixer', 'NAFNet_stacking_lr0.001'],
+        choices=['Unet_finetune', 'ResUnet_with_stacking', 'test_mlpmixer', 'NAFNet_stacking_lr0.001', 'NAFNet_final'],
         help="Name of model"
     )
     parser.add_argument(
         "--model_type",
-        default="Unet",
+        default="NAFNet",
         type=str,
         choices=['Unet', 'ResUnet', 'MLPMixer', 'NAFNet'],
         help="Type of model"
@@ -161,4 +161,4 @@ if __name__ == '__main__':
 
     args = parser.parse_args()
 
-    unet_eval(args)
+    imtoim_eval(args)
