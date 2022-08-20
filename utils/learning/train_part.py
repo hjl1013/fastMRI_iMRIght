@@ -16,7 +16,8 @@ from utils.common.utils import save_reconstructions, ssim_loss
 from utils.common.loss_function import SSIMLoss
 from utils.model.varnet import VarNet
 from utils.model.unet import Unet
-from utils.mixup.cutmix import apply_cutmix_to_batch
+from utils.mixup.cutmix import cutmix
+from utils.mixup.input_mixup import input_mixup
 from core.res_unet_plus import ResUnetPlusPlus
 from networks import Img2Img_Mixer, ReconNet
 from basicsr.models.archs.NAFNet_arch import NAFNet
@@ -430,7 +431,7 @@ def imtoim_train(args):
 
 ####################### imtoim with cutmix ####################
 
-def imtoim_cutmix_train_epoch(args, epoch, model, data_loader, optimizer, scaler, iters_to_accumulate, loss_type):
+def imtoim_mixup_train_epoch(args, epoch, model, data_loader, optimizer, scaler, iters_to_accumulate, loss_type, mixup):
     model.train()
     start_epoch = start_iter = time.perf_counter()
     len_loader = 0
@@ -441,17 +442,17 @@ def imtoim_cutmix_train_epoch(args, epoch, model, data_loader, optimizer, scaler
     for iter, data in enumerate(pbar):
         input_batch, target_batch, _, _, img_mask_batch = data
 
-        mixup_input, mixup_target, mixup_img_mask, _ = apply_cutmix_to_batch(
+        mixup_input, mixup_target, mixup_img_mask, _ = mixup(
             input_batch=input_batch,
             target_batch=target_batch,
             img_mask_batch=img_mask_batch,
         )
 
-        for i in range(0, len(mixup_input), args.batch_size_for_cutmix):
+        for i in range(0, len(mixup_input), args.batch_size_for_mixup):
             with autocast(enabled=False):
-                input = mixup_input[i: i + args.batch_size_for_cutmix]
-                target = mixup_target[i: i + args.batch_size_for_cutmix]
-                img_mask = mixup_img_mask[i: i + args.batch_size_for_cutmix]
+                input = mixup_input[i: i + args.batch_size_for_mixup]
+                target = mixup_target[i: i + args.batch_size_for_mixup]
+                img_mask = mixup_img_mask[i: i + args.batch_size_for_mixup]
                 std = torch.std(input, dim=(1, 2, 3))
                 mean = torch.mean(input, dim=(1, 2, 3))
                 maximum = target.max(dim=1).values.max(dim=1).values.max(dim=1).values
@@ -510,7 +511,7 @@ def imtoim_cutmix_train_epoch(args, epoch, model, data_loader, optimizer, scaler
     return total_loss, time.perf_counter() - start_epoch
 
 
-def imtoim_cutmix_validate(args, model, data_loader, loss_type):
+def imtoim_mixup_validate(args, model, data_loader, loss_type):
     model.eval()
     reconstructions = defaultdict(dict)
     targets = defaultdict(dict)
@@ -561,7 +562,7 @@ def imtoim_cutmix_validate(args, model, data_loader, loss_type):
     return val_loss, reconstructions, targets, None, time.perf_counter() - start
 
 
-def imtoim_cutmix_train(args):
+def imtoim_mixup_train(args):
     device = torch.device(f'cuda:{args.GPU_NUM}' if torch.cuda.is_available() else 'cpu')
     torch.cuda.set_device(device)
     print('Current cuda device: ', torch.cuda.current_device())
@@ -609,6 +610,11 @@ def imtoim_cutmix_train(args):
     )
     scaler = GradScaler(enabled=False)
 
+    if args.mixup_type == 'cutmix':
+        mixup = cutmix
+    elif args.mixup_type == 'input_mixup':
+        mixup = input_mixup
+
     best_val_ssim = 1.
     start_epoch = 0
 
@@ -628,18 +634,18 @@ def imtoim_cutmix_train(args):
     train_loader = create_data_loaders_for_imtoim_cutmix(data_path=args.data_path_train, args=args, use_augment=True)
     val_loader = create_data_loaders_for_imtoim_cutmix_validation(data_path=args.data_path_val, args=args, use_augment=False)
     test_loader = create_data_loaders_for_imtoim_cutmix_validation(data_path=args.data_path_test, args=args, use_augment=False)
-    iters_to_accumulate = args.batch_size / args.batch_size_for_cutmix
+    iters_to_accumulate = args.batch_size / args.batch_size_for_mixup
 
     for epoch in range(start_epoch, args.num_epochs):
         print(f'Epoch #{epoch:2d} ............... {args.net_name} ...............')
         print(f"learning rate: {optimizer.param_groups[0]['lr']:.5f}")
 
         train_loss, train_time = \
-            imtoim_cutmix_train_epoch(args, epoch, model, train_loader, optimizer, scaler, iters_to_accumulate, loss_type)
+            imtoim_mixup_train_epoch(args, epoch, model, train_loader, optimizer, scaler, iters_to_accumulate, loss_type, mixup)
         val_loss, reconstructions, targets, inputs, val_time = \
-            imtoim_cutmix_validate(args, model, val_loader, loss_type)
+            imtoim_mixup_validate(args, model, val_loader, loss_type)
         test_loss, reconstructions_test, targets_test, inputs_test, test_time = \
-            imtoim_cutmix_validate(args, model, test_loader, loss_type)
+            imtoim_mixup_validate(args, model, test_loader, loss_type)
 
         train_loss = torch.tensor(train_loss).cuda(non_blocking=True)
         val_loss = torch.tensor(val_loss).cuda(non_blocking=True)
