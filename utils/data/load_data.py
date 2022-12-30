@@ -1,7 +1,8 @@
 import h5py
 import random
 
-from utils.data.transforms import VarnetDataTransform, UnetDataTransform, MultichannelDataTransform, ADLDataTransform
+from utils.data.transforms import VarnetDataTransform, UnetDataTransform, MultichannelDataTransform, ADLDataTransform,\
+    MultichannelDataTransform_with_mixup
 from torch.utils.data import Dataset, DataLoader
 from pathlib import Path
 import numpy as np
@@ -182,4 +183,51 @@ def create_data_loaders(data_path, args, use_augment=False, isforward=False):
         dataset=data_storage,
         batch_size=args.batch_size
     )
+    return data_loader
+
+def create_data_loaders_for_imtoim_mixup(data_path, args, use_augment=False, isforward=False):
+    if isforward == False:
+        max_key_ = args.max_key
+        target_key_ = args.target_key
+    else:
+        max_key_ = -1
+        target_key_ = -1
+
+    data_storage = MultichannelSliceData(
+        root=data_path,
+        transform=MultichannelDataTransform_with_mixup(max_key=max_key_, use_augment=use_augment),
+        input_key=args.input_key,
+        input_num=args.input_num,
+        target_key=target_key_,
+    )
+
+    data_loader = DataLoader(
+        dataset=data_storage,
+        batch_size=args.batch_size
+    )
+
+    return data_loader
+
+
+def create_data_loaders_for_imtoim_mixup_validation(data_path, args, use_augment=False, isforward=False):
+    if isforward == False:
+        max_key_ = args.max_key
+        target_key_ = args.target_key
+    else:
+        max_key_ = -1
+        target_key_ = -1
+
+    data_storage = MultichannelSliceData(
+        root=data_path,
+        transform=MultichannelDataTransform(max_key=max_key_, use_augment=use_augment),
+        input_key=args.input_key,
+        input_num=args.input_num,
+        target_key=target_key_,
+    )
+
+    data_loader = DataLoader(
+        dataset=data_storage,
+        batch_size=2
+    )
+
     return data_loader

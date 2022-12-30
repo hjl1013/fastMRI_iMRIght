@@ -3,6 +3,8 @@ from typing import Callable, Dict, List, Optional, Sequence, Tuple, Union
 import h5py
 import numpy as np
 import argparse
+import sys
+sys.path.append('/root/fastMRI_hjl')
 
 import fastmri
 
@@ -85,8 +87,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     args.models = [
-        ("VarNet_pretrained", Path("/root/result/VarNet_pretrained/reconstructions"), 0.4),
-        ("XPDNet_pretrained", Path("/root/result/XPDNet_pretrained/reconstructions"), 0.6)
+        ("NAFNet", Path("/root/result/NAFNet_ours/reconstructions"), 0.5),
+        ("MLPMixer", Path("/root/result/test_mlpmixer/reconstructions_val"), 0.5)
     ]
 
     output_path = "/root/result/ensemble"

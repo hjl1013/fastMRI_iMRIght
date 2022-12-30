@@ -82,7 +82,7 @@ class NAFBlock(nn.Module):
 
 class NAFNet(nn.Module):
 
-    def __init__(self, img_channel=3, width=16, middle_blk_num=1, enc_blk_nums=[], dec_blk_nums=[]):
+    def __init__(self, img_channel=3, width=16, middle_blk_num=1, enc_blk_nums=[], dec_blk_nums=[], dropout=0.):
         super().__init__()
 
         self.intro = nn.Conv2d(in_channels=img_channel, out_channels=width, kernel_size=3, padding=1, stride=1, groups=1,
@@ -100,7 +100,7 @@ class NAFNet(nn.Module):
         for num in enc_blk_nums:
             self.encoders.append(
                 nn.Sequential(
-                    *[NAFBlock(chan) for _ in range(num)]
+                    *[NAFBlock(chan, drop_out_rate=dropout) for _ in range(num)]
                 )
             )
             self.downs.append(
@@ -110,7 +110,7 @@ class NAFNet(nn.Module):
 
         self.middle_blks = \
             nn.Sequential(
-                *[NAFBlock(chan) for _ in range(middle_blk_num)]
+                *[NAFBlock(chan, drop_out_rate=dropout) for _ in range(middle_blk_num)]
             )
 
         for num in dec_blk_nums:
@@ -123,7 +123,7 @@ class NAFNet(nn.Module):
             chan = chan // 2
             self.decoders.append(
                 nn.Sequential(
-                    *[NAFBlock(chan) for _ in range(num)]
+                    *[NAFBlock(chan, drop_out_rate=dropout) for _ in range(num)]
                 )
             )
 

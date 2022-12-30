@@ -5,7 +5,7 @@ if os.getcwd() + '/utils/model/' not in sys.path:
     sys.path.insert(1, os.getcwd() + '/utils/model/')
 sys.path.append('/root/ksunw')
 
-from utils.learning.train_part import varnet_train, imtoim_train
+from utils.learning.train_part import varnet_train, imtoim_mixup_train
 from pathlib import Path
 
 def str2bool(v):
@@ -23,12 +23,14 @@ def parse(parser=None):
         parser = argparse.ArgumentParser(description='Train Unet on FastMRI challenge Images',
                                      formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     parser.add_argument('-g', '--GPU-NUM', type=int, default=0, help='GPU number to allocate')
-    parser.add_argument('-b', '--batch-size', type=int, default=2, help='Batch size')
+    parser.add_argument('-b', '--batch-size', type=int, default=32, help='Batch size')
+    parser.add_argument('-bm', '--batch-size-for-mixup', type=int, default=2,
+                        help='Batch size for mixup, this is the real batch size that goes through the model')
     parser.add_argument('-bu', '--batch-update', type=int, default=64, help='num of batch to accumulate grad')
     parser.add_argument('-cl', '--clip', type=str2bool, default=False, help='whether to use gradient clipping')
     parser.add_argument('-mn', '--max-norm', type=float, default=0.01, help='max norm for gradient clipping')
     parser.add_argument('-e', '--num-epochs', type=int, default=40, help='Number of epochs')
-    parser.add_argument('-l', '--lr', type=float, default=0.001, help='Learning rate')
+    parser.add_argument('-l', '--lr', type=float, default=1e-4, required=True, help='Learning rate')
     parser.add_argument('-f', '--factor', type=float, default=0.1, help='factor for ReduceLROnPlateau')
     parser.add_argument('-w', '--weight-decay', type=float, default=0, help='weight decay')
     parser.add_argument('-d', '--dropout', type=float, default=0., help='dropout rate')
@@ -46,6 +48,8 @@ def parse(parser=None):
                         help='path of pretrained model to continue on training')
     parser.add_argument('-c', '--continue-training', type=str2bool, default=True, required=True,
                         help='whether to continue training or restart with the given model')
+    parser.add_argument('-mt', '--mixup_type', type=str, required=True, choices=['cutmix', 'input_mixup'],
+                        help='whether to use cutmix mixup strategy when training imtoim models')
 
     parser.add_argument('--cascade', type=int, default=3,
                         help='Number of cascades | Should be less than 12')  ## important hyperparameter
@@ -62,12 +66,10 @@ if __name__ == '__main__':
     args = parse()
     args.exp_dir = '/root/result' / args.net_name / 'checkpoints'
     args.val_dir = '/root/result' / args.net_name / 'reconstructions_val'
+    args.test_dir = '/root/result' / args.net_name / 'reconstructions_test'
     args.main_dir = '/root/result' / args.net_name / __file__
 
     args.exp_dir.mkdir(parents=True, exist_ok=True)
     args.val_dir.mkdir(parents=True, exist_ok=True)
 
-    if args.model_type == 'Varnet':
-        varnet_train(args)
-    elif args.model_type in ['Unet', 'ResUnet', 'MLPMixer', 'NAFNet']:
-        imtoim_train(args)
+    imtoim_mixup_train(args)

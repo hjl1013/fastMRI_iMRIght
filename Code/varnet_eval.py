@@ -105,9 +105,9 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         "--model_name",
-        default="test_varnet",
+        default="VarNet_final",
         type=str,
-        choices=['VarNet_pretrained', 'VarNet_ours', 'VarNet_SNU', 'test_varnet'],
+        choices=['VarNet_pretrained', 'VarNet_ours', 'VarNet_SNU', 'test_varnet', 'VarNet_final'],
         help="Name of model"
     )
     parser.add_argument(
@@ -118,7 +118,7 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         "--output_dir",
-        default="/root/input_imtoim/train",
+        default="/root/input_imtoim_VarNet/train/image",
         type=Path,
         help="Where to save reconstructed images"
     )
@@ -130,7 +130,7 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         "--save_mode",
-        default="reconstruction",
+        default="imtoim_input",
         type=str,
         choices=["imtoim_input", "reconstruction"],
         help="Mode of saving outputs"

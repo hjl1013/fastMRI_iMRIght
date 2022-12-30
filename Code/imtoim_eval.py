@@ -5,9 +5,9 @@ import numpy as np
 from pathlib import Path
 
 from get_model import get_model
-from utils.data.transforms import UnetDataTransform, ResUnetDataTransform
+from utils.data.transforms import UnetDataTransform, MultichannelDataTransform
 
-def forward_file_unet(model, device, image_fpath):
+def forward_file_unet(args, model, device, image_fpath):
     with h5py.File(image_fpath, "r") as hf:
         images = np.array(hf['image_input'])
 
@@ -32,7 +32,7 @@ def forward_file_unet(model, device, image_fpath):
     return output
 
 
-def forward_file_resunet(model, device, image_fpath):
+def forward_file_multichannel(args, model, device, image_fpath):
     with h5py.File(image_fpath, "r") as hf:
         images = np.stack([
             hf['image_input'],
@@ -40,14 +40,16 @@ def forward_file_resunet(model, device, image_fpath):
             hf['VarNet_recon'],
             hf['XPDNet_recon']
         ], axis=1)
+        target_trash = np.array(hf['image_label'])[0]
 
-    transform = ResUnetDataTransform(isforward=True, max_key='max')
+    transform = MultichannelDataTransform(max_key='max', use_augment=False)
 
     output = []
     for image in images:
-        image_input, _, _, mean, std, _, _ = transform(
+        image_input, _, mean, std, _, _, _, _ = transform(
             input=image,
-            target=None,
+            input_num=args.input_num,
+            target=target_trash,
             attrs=None,
             fname=None,
             slice=None,
@@ -67,7 +69,7 @@ def save_file_recon(output, output_dir, fname):
         hf.create_dataset("reconstruction", data=output)
 
 
-def unet_eval(args):
+def imtoim_eval(args):
     device = torch.device(args.device)
 
     model = get_model(
@@ -80,8 +82,8 @@ def unet_eval(args):
 
     if args.model_type == 'Unet':
         forward_file = forward_file_unet
-    elif args.model_type == 'ResUnet':
-        forward_file = forward_file_resunet
+    elif args.model_type in ['ResUnet', 'MLPMixer', 'NAFNet']:
+        forward_file = forward_file_multichannel
 
     with torch.no_grad():
         image_input_dir = args.data_dir / 'image'
@@ -97,7 +99,7 @@ def unet_eval(args):
 
             print(f"[{i} / {tot}] Saving file {fname}")
 
-            output = forward_file(model, device, image_data_path)
+            output = forward_file(args, model, device, image_data_path)
             if args.save_mode == 'reconstruction':
                 save_file_recon(output, output_dir, fname)
             else:
@@ -113,16 +115,16 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         "--model_name",
-        default="Unet_finetune",
+        default="NAFNet_final",
         type=str,
-        choices=['Unet_finetune', 'ResUnet_with_stacking'],
+        choices=['Unet_finetune', 'ResUnet_with_stacking', 'test_mlpmixer', 'NAFNet_stacking_lr0.001', 'NAFNet_final'],
         help="Name of model"
     )
     parser.add_argument(
         "--model_type",
-        default="Unet",
+        default="NAFNet",
         type=str,
-        choices=['Unet', 'ResUnet'],
+        choices=['Unet', 'ResUnet', 'MLPMixer', 'NAFNet'],
         help="Type of model"
     )
     parser.add_argument(
@@ -150,7 +152,13 @@ if __name__ == '__main__':
         choices=["imtoim_input", "reconstruction"],
         help="Mode of saving outputs"
     )
+    parser.add_argument(
+        "--input_num",
+        default=4,
+        type=int,
+        help="number of input layers"
+    )
 
     args = parser.parse_args()
 
-    unet_eval(args)
+    imtoim_eval(args)

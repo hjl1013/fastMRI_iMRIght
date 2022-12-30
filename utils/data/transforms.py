@@ -25,13 +25,19 @@ def minmaxScale(data):
     return (data - min) / (max - min), min, max
 
 
-def random_augment(input, target):
+def random_augment(input, target, img_mask):
+
+    if img_mask is None:
+        img_mask = torch.zeros(target.shape)
+
     r_flip = random()
     if r_flip > 0.5:
         for i in range(len(input)):
             input[i] = torch.fliplr(input[i])
         for i in range(len(target)):
             target[i] = torch.fliplr(target[i])
+        for i in range(len(img_mask)):
+            img_mask[i] = torch.fliplr(img_mask[i])
 
     r_rotate = random()
     if r_rotate > 0.25:
@@ -39,30 +45,40 @@ def random_augment(input, target):
             input[i] = torch.rot90(input[i])
         for i in range(len(target)):
             target[i] = torch.rot90(target[i])
+        for i in range(len(img_mask)):
+            img_mask[i] = torch.rot90(img_mask[i])
     if r_rotate > 0.5:
         for i in range(len(input)):
             input[i] = torch.rot90(input[i])
         for i in range(len(target)):
             target[i] = torch.rot90(target[i])
+        for i in range(len(img_mask)):
+            img_mask[i] = torch.rot90(img_mask[i])
     if r_rotate > 0.75:
         for i in range(len(input)):
             input[i] = torch.rot90(input[i])
         for i in range(len(target)):
             target[i] = torch.rot90(target[i])
+        for i in range(len(img_mask)):
+            img_mask[i] = torch.rot90(img_mask[i])
 
     r_rollud = int(random() * 19) - 9
     for i in range(len(input)):
         input[i] = torch.roll(input[i], shifts=r_rollud, dims=0)
     for i in range(len(target)):
         target[i] = torch.roll(target[i], shifts=r_rollud, dims=0)
+    for i in range(len(img_mask)):
+        img_mask[i] = torch.roll(img_mask[i], shifts=r_rollud, dims=0)
 
     r_rolllr = int(random() * 19) - 9
     for i in range(len(input)):
         input[i] = torch.roll(input[i], shifts=r_rolllr, dims=1)
     for i in range(len(target)):
         target[i] = torch.roll(target[i], shifts=r_rolllr, dims=1)
+    for i in range(len(img_mask)):
+        img_mask[i] = torch.roll(img_mask[i], shifts=r_rollud, dims=1)
 
-    return input, target
+    return input, target, img_mask
 
 
 class VarnetDataTransform:
@@ -141,7 +157,7 @@ class MultichannelDataTransform:
         img_mask = img_mask[None, ...]
 
         if self.use_augment:
-            input, target = random_augment(input, target)
+            input, target, img_mask = random_augment(input, target, img_mask)
 
         return input, target, mean, std, fname, slice, maximum, img_mask
 
@@ -165,7 +181,7 @@ class ADLDataTransform:
         target = (target - min) / (max - min)
 
         if self.use_augment:
-            input, target = random_augment(input, target)
+            input, target, _ = random_augment(input, target, None)
 
         data = dict()
         data['x'] = target  # gt
@@ -177,3 +193,33 @@ class ADLDataTransform:
         data['slice'] = slice
 
         return data
+
+class MultichannelDataTransform_with_mixup:
+    def __init__(self, max_key, use_augment):
+        self.max_key = max_key
+        self.use_augment = use_augment
+
+    def __call__(self, input, input_num, target, attrs, fname, slice):
+        input = to_tensor(input).type(torch.FloatTensor)
+        input = input[-input_num:]
+        # normalize input
+        # input, mean, std = normalize_instance(input, eps=1e-11)
+        # input = input.clamp(-6, 6)
+
+        img_mask = np.zeros(target.shape)
+        img_mask[target > 5e-5] = 1
+        kernel = np.ones((3, 3), np.uint8)
+        img_mask = cv2.erode(img_mask, kernel, iterations=1)
+        img_mask = cv2.dilate(img_mask, kernel, iterations=15)
+        img_mask = cv2.erode(img_mask, kernel, iterations=14)
+
+        target = to_tensor(target)
+        img_mask = (to_tensor(img_mask)).type(torch.FloatTensor)
+
+        target = target[None, ...]
+        img_mask = img_mask[None, ...]
+
+        if self.use_augment:
+            input, target, img_mask = random_augment(input, target, img_mask)
+
+        return input, target, fname, slice, img_mask
